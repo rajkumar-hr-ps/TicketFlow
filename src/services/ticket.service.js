@@ -10,6 +10,7 @@ import { holdKey } from './hold.service.js';
 import { getAvailableSeats } from '../utils/helpers.js';
 
 // --- Bug 3 Solution: Hold-to-purchase with counter transitions ---
+//TODO: NOT IN USE
 export const confirmTicketPurchase = async (ticketId) => {
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) throw new NotFoundError('ticket not found');
@@ -48,6 +49,7 @@ export const confirmTicketPurchase = async (ticketId) => {
 };
 
 // --- Bug 5 Solution: Ticket transfer with full ownership chain ---
+//TODO: NOT IN USE
 export const transferTicket = async (ticketId, fromUserId, toEmail) => {
   const ticket = await Ticket.findOneActive({ _id: ticketId, user_id: fromUserId });
   if (!ticket) {
@@ -106,6 +108,7 @@ export const transferTicket = async (ticketId, fromUserId, toEmail) => {
 };
 
 // --- Bug 7 Solution: HMAC barcode generation and verification ---
+//TODO: NOT IN USE
 export const generateBarcode = (ticketId, userId, eventId) => {
   const payload = {
     tid: ticketId.toString(),
@@ -125,6 +128,7 @@ export const generateBarcode = (ticketId, userId, eventId) => {
   return `${payloadB64}.${signature}`;
 };
 
+//TODO: NOT IN USE
 export const verifyBarcode = async (barcode) => {
   const parts = barcode.split('.');
   if (parts.length !== 2) {

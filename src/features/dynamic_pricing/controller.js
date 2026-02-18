@@ -1,7 +1,7 @@
 import { Section } from '../../models/Section.js';
 import { Event } from '../../models/Event.js';
-import { getPricingTier, roundMoney, getAvailableSeats } from '../../utils/helpers.js';
-import { SERVICE_FEE_RATE, FACILITY_FEE_RATE, PROCESSING_FEE } from '../../services/pricing.service.js';
+import { roundMoney, getAvailableSeats } from '../../utils/helpers.js';
+import { getPricingTier, SERVICE_FEE_RATE, FACILITY_FEE_RATE, PROCESSING_FEE } from '../../services/pricing.service.js';
 
 export const getDynamicPricing = async (req, res) => {
   const { id: eventId } = req.params;

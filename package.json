@@ -18,7 +18,13 @@
     "test:task7": "cross-env NODE_ENV=test PORT=8087 MOCHA_FILE=../output/task7.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task7/*.js --exit",
     "test:task8": "cross-env NODE_ENV=test PORT=8088 MOCHA_FILE=../output/task8.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task8/*.js --exit",
     "test:task9": "cross-env NODE_ENV=test PORT=8089 MOCHA_FILE=../output/task9.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task9/*.js --exit",
-    "test:task10": "cross-env NODE_ENV=test PORT=8090 MOCHA_FILE=../output/task10.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task10/*.js --exit"
+    "test:task10": "cross-env NODE_ENV=test PORT=8090 MOCHA_FILE=../output/task10.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task10/*.js --exit",
+    "test:task11": "cross-env NODE_ENV=test PORT=8091 MOCHA_FILE=../output/task11.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task11/*.js --exit",
+    "test:task12": "cross-env NODE_ENV=test PORT=8092 MOCHA_FILE=../output/task12.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task12/*.js --exit",
+    "test:task13": "cross-env NODE_ENV=test PORT=8093 MOCHA_FILE=../output/task13.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task13/*.js --exit",
+    "test:task14": "cross-env NODE_ENV=test PORT=8094 MOCHA_FILE=../output/task14.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task14/*.js --exit",
+    "test:task15": "cross-env NODE_ENV=test PORT=8095 MOCHA_FILE=../output/task15.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task15/*.js --exit",
+    "test:task16": "cross-env NODE_ENV=test PORT=8096 MOCHA_FILE=../output/task16.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task16/*.js --exit"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

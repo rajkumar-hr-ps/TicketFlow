@@ -1,6 +1,7 @@
 import { Section } from '../models/Section.js';
 import { NotFoundError } from '../utils/AppError.js';
-import { getPricingTier, roundMoney, getAvailableSeats } from '../utils/helpers.js';
+import { roundMoney, getAvailableSeats } from '../utils/helpers.js';
+import { getPricingTier } from './pricing.service.js';
 
 export const getSectionsByEvent = async (eventId) => {
   const sections = await Section.findActive({ event_id: eventId });

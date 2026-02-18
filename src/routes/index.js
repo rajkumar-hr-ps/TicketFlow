@@ -6,6 +6,7 @@ import { router as sectionRoutes } from './section.routes.js';
 import { router as orderRoutes } from './order.routes.js';
 import { router as promoCodeRoutes } from './promoCode.routes.js';
 import { router as paymentRoutes } from './payment.routes.js';
+import { router as ticketRoutes } from './ticket.routes.js';
 
 // Feature routes
 import { router as seatMapRoutes } from '../features/seat_availability_map/routes.js';
@@ -44,4 +45,5 @@ router.use('/payments', paymentRoutes);
 router.use('/', paymentRoutes);
 
 // Ticket routes
+router.use('/tickets', ticketRoutes);
 router.use('/tickets', ticketTransferRoutes);

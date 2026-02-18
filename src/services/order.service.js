@@ -57,12 +57,16 @@ export const createOrder = async (userId, data) => {
   // Increment held_count
   await Section.findByIdAndUpdate(section_id, { $inc: { held_count: quantity } });
 
+  // Pre-generate order ID so tickets can reference it
+  const orderId = new mongoose.Types.ObjectId();
+
   // Create tickets
   const tickets = [];
   const holdExpiry = new Date(Date.now() + HOLD_TTL_MS);
 
   for (let i = 0; i < quantity; i++) {
     const ticket = await Ticket.create({
+      order_id: orderId,
       event_id,
       section_id,
       user_id: userId,
@@ -89,6 +93,7 @@ export const createOrder = async (userId, data) => {
 
   // Create order with full pricing
   const order = await Order.create({
+    _id: orderId,
     user_id: userId,
     event_id,
     tickets: tickets.map((t) => t._id),
@@ -142,6 +147,9 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
   try {
     session.startTransaction();
 
+    // Pre-generate order ID so tickets can reference it
+    const orderId = new mongoose.Types.ObjectId();
+
     let totalSubtotal = 0;
     let totalServiceFee = 0;
     let totalFacilityFee = 0;
@@ -178,6 +186,7 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
       for (let i = 0; i < req.quantity; i++) {
         const ticket = await Ticket.create(
           [{
+            order_id: orderId,
             event_id: eventId,
             section_id: req.section_id,
             user_id: userId,
@@ -205,6 +214,7 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
 
     const order = await Order.create(
       [{
+        _id: orderId,
         user_id: userId,
         event_id: eventId,
         tickets: createdTickets.map((t) => t._id),

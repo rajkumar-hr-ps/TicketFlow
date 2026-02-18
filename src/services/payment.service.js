@@ -11,12 +11,14 @@ export const getPaymentsByOrder = async (orderId) => {
   return payments;
 };
 
+//TODO: NOT IN USE
 export const createPayment = async (data) => {
   const payment = new Payment(data);
   await payment.save();
   return payment;
 };
 
+//TODO: NOT IN USE
 export const getPaymentById = async (paymentId) => {
   const payment = await Payment.findOneActive({ _id: paymentId });
   if (!payment) {

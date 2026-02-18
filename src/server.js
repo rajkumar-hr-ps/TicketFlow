@@ -1,16 +1,11 @@
 import { app } from './app.js';
 import { config } from './config/env.js';
 import { connectDB } from './config/db.js';
-import { redisClient } from './config/redis.js';
+import { connectRedis } from './config/redis.js';
 
 const start = async () => {
   await connectDB();
-
-  try {
-    await redisClient.connect();
-  } catch {
-    console.log('Redis connection deferred — will connect on first use');
-  }
+  await connectRedis();
 
   // Start background workers
   try {
