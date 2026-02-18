@@ -1,6 +1,13 @@
 import mongoose from 'mongoose';
 
-export const WAITLIST_STATUSES = ['waiting', 'notified', 'expired', 'converted'];
+export const WaitlistStatus = {
+  WAITING: 'waiting',
+  NOTIFIED: 'notified',
+  EXPIRED: 'expired',
+  CONVERTED: 'converted',
+};
+
+export const WAITLIST_STATUSES = Object.values(WaitlistStatus);
 
 const waitlistEntrySchema = new mongoose.Schema(
   {

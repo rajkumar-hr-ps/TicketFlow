@@ -1,6 +1,6 @@
 import { Section } from '../../models/Section.js';
 import { Event } from '../../models/Event.js';
-import { getPricingTier, roundMoney } from '../../utils/helpers.js';
+import { getPricingTier, roundMoney, getAvailableSeats } from '../../utils/helpers.js';
 import { SERVICE_FEE_RATE, FACILITY_FEE_RATE, PROCESSING_FEE } from '../../services/pricing.service.js';
 
 export const getDynamicPricing = async (req, res) => {
@@ -26,7 +26,7 @@ export const getDynamicPricing = async (req, res) => {
     return res.status(404).json({ error: 'section not found' });
   }
 
-  const available = Math.max(0, section.capacity - section.sold_count - section.held_count);
+  const available = getAvailableSeats(section);
   if (qty > available) {
     return res.status(400).json({ error: 'requested quantity exceeds available seats' });
   }

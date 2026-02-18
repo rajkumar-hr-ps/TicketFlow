@@ -2,7 +2,7 @@ import { Worker } from 'bullmq';
 import { Payment, PaymentStatus } from '../models/Payment.js';
 import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
-import { config } from '../config/env.js';
+import { config, JOB_CONCURRENCY } from '../config/env.js';
 
 const connection = {
   host: new URL(config.redisUrl).hostname || 'localhost',
@@ -45,7 +45,7 @@ const paymentWorker = new Worker(
   },
   {
     connection,
-    concurrency: 5,
+    concurrency: JOB_CONCURRENCY.PAYMENT,
   }
 );
 

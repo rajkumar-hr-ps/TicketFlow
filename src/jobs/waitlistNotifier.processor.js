@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
-import { WaitlistEntry } from '../models/WaitlistEntry.js';
-import { config } from '../config/env.js';
+import { WaitlistEntry, WaitlistStatus } from '../models/WaitlistEntry.js';
+import { config, JOB_CONCURRENCY } from '../config/env.js';
 
 const connection = {
   host: new URL(config.redisUrl).hostname || 'localhost',
@@ -15,14 +15,14 @@ const waitlistNotifierWorker = new Worker(
     // Find the next N users on the waitlist
     const entries = await WaitlistEntry.find({
       event_id,
-      status: 'waiting',
+      status: WaitlistStatus.WAITING,
     })
       .sort({ position: 1 })
       .limit(available_seats || 1);
 
     const notified = [];
     for (const entry of entries) {
-      entry.status = 'notified';
+      entry.status = WaitlistStatus.NOTIFIED;
       await entry.save();
       notified.push({
         user_id: entry.user_id,
@@ -34,7 +34,7 @@ const waitlistNotifierWorker = new Worker(
   },
   {
     connection,
-    concurrency: 3,
+    concurrency: JOB_CONCURRENCY.WAITLIST_NOTIFIER,
   }
 );
 

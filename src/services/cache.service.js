@@ -1,5 +1,11 @@
 import { redisClient } from '../config/redis.js';
 
+export const CACHE_TTL = {
+  DEFAULT: 300,
+  EVENTS_LIST: 60,
+  VENUES: 300,
+};
+
 export const getCache = async (key) => {
   try {
     const data = await redisClient.get(key);

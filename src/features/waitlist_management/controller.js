@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Event, EventStatus } from '../../models/Event.js';
-import { WaitlistEntry } from '../../models/WaitlistEntry.js';
+import { WaitlistEntry, WaitlistStatus } from '../../models/WaitlistEntry.js';
 
 export const joinWaitlist = async (req, res) => {
   const eventId = req.params.id;
@@ -19,7 +19,7 @@ export const joinWaitlist = async (req, res) => {
   const existing = await WaitlistEntry.findOne({
     event_id: eventId,
     user_id: userId,
-    status: 'waiting',
+    status: WaitlistStatus.WAITING,
   });
   if (existing) {
     return res.status(409).json({ error: 'already on waitlist for this event' });
@@ -37,13 +37,13 @@ export const joinWaitlist = async (req, res) => {
     event_id: eventId,
     user_id: userId,
     position: counter.seq,
-    status: 'waiting',
+    status: WaitlistStatus.WAITING,
   });
 
   const totalAhead = await WaitlistEntry.countDocuments({
     event_id: eventId,
     position: { $lt: entry.position },
-    status: 'waiting',
+    status: WaitlistStatus.WAITING,
   });
 
   return res.status(201).json({
@@ -51,7 +51,7 @@ export const joinWaitlist = async (req, res) => {
     event_id: eventId,
     position: entry.position,
     ahead: totalAhead,
-    status: 'waiting',
+    status: WaitlistStatus.WAITING,
     joined_at: entry.created_at,
   });
 };
@@ -63,7 +63,7 @@ export const getWaitlistPosition = async (req, res) => {
   const entry = await WaitlistEntry.findOne({
     event_id: eventId,
     user_id: userId,
-    status: 'waiting',
+    status: WaitlistStatus.WAITING,
   });
   if (!entry) {
     return res.status(404).json({ error: 'not on waitlist for this event' });
@@ -72,12 +72,12 @@ export const getWaitlistPosition = async (req, res) => {
   const totalAhead = await WaitlistEntry.countDocuments({
     event_id: eventId,
     position: { $lt: entry.position },
-    status: 'waiting',
+    status: WaitlistStatus.WAITING,
   });
 
   const totalWaiting = await WaitlistEntry.countDocuments({
     event_id: eventId,
-    status: 'waiting',
+    status: WaitlistStatus.WAITING,
   });
 
   return res.json({

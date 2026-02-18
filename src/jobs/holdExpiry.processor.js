@@ -2,7 +2,7 @@ import { Worker } from 'bullmq';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
 import { Section } from '../models/Section.js';
 import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
-import { config } from '../config/env.js';
+import { config, JOB_CONCURRENCY } from '../config/env.js';
 
 const connection = {
   host: new URL(config.redisUrl).hostname || 'localhost',
@@ -55,7 +55,7 @@ const holdExpiryWorker = new Worker(
   },
   {
     connection,
-    concurrency: 1,
+    concurrency: JOB_CONCURRENCY.HOLD_EXPIRY,
   }
 );
 

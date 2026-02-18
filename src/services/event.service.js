@@ -9,7 +9,8 @@ import { PromoCode } from '../models/PromoCode.js';
 import { redisClient } from '../config/redis.js';
 import { BadRequestError, NotFoundError, ConflictError } from '../utils/AppError.js';
 import * as cacheService from './cache.service.js';
-import { roundMoney } from '../utils/helpers.js';
+import { holdKey } from './hold.service.js';
+import { roundMoney, getAvailableSeats, idempotencyKey } from '../utils/helpers.js';
 
 const BUFFER_HOURS = 4;
 
@@ -140,7 +141,7 @@ export const getEvents = async (filters = {}) => {
     },
   };
 
-  await cacheService.setCache(cacheKey, result, 60);
+  await cacheService.setCache(cacheKey, result, cacheService.CACHE_TTL.EVENTS_LIST);
 
   return result;
 };
@@ -155,7 +156,7 @@ export const getEventById = async (eventId) => {
   const sections = await Section.findActive({ event_id: eventId });
   const sectionsWithAvailability = sections.map((s) => ({
     ...s.toObject(),
-    available: Math.max(0, s.capacity - s.sold_count - s.held_count),
+    available: getAvailableSeats(s),
   }));
 
   return { event, sections: sectionsWithAvailability };
@@ -184,7 +185,7 @@ export const updateEventStatus = async (eventId, newStatus, userId) => {
 
   if (newStatus === EventStatus.ON_SALE && event.status === EventStatus.SOLD_OUT) {
     const sections = await Section.findActive({ event_id: eventId });
-    const hasAvailable = sections.some((s) => s.capacity - s.sold_count - s.held_count > 0);
+    const hasAvailable = sections.some((s) => getAvailableSeats(s) > 0);
     if (!hasAvailable) {
       throw new BadRequestError('cannot set on_sale when no seats are available');
     }
@@ -253,7 +254,7 @@ export const cancelEvent = async (eventId, organizerId) => {
           amount: totalRefund,
           type: PaymentType.REFUND,
           status: PaymentStatus.COMPLETED,
-          idempotency_key: `cancel_refund_${eventId}_${order._id}`,
+          idempotency_key: idempotencyKey.cancelRefund(eventId, order._id),
         });
       }
 
@@ -296,8 +297,7 @@ export const cancelEvent = async (eventId, organizerId) => {
     deleted_at: null,
   });
   for (const held of heldTickets) {
-    const holdKey = `hold:${held.section_id}:${held._id}`;
-    await redisClient.del(holdKey);
+    await redisClient.del(holdKey(held.section_id, held._id));
   }
   await Ticket.updateMany(
     { event_id: eventId, status: TicketStatus.HELD },

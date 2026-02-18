@@ -6,6 +6,8 @@ import { User } from '../models/User.js';
 import { redisClient } from '../config/redis.js';
 import { config } from '../config/env.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
+import { holdKey } from './hold.service.js';
+import { getAvailableSeats } from '../utils/helpers.js';
 
 // --- Bug 3 Solution: Hold-to-purchase with counter transitions ---
 export const confirmTicketPurchase = async (ticketId) => {
@@ -24,8 +26,7 @@ export const confirmTicketPurchase = async (ticketId) => {
   );
 
   // 2. Clean up Redis hold key
-  const holdKey = `hold:${ticket.section_id}:${ticket._id}`;
-  await redisClient.del(holdKey);
+  await redisClient.del(holdKey(ticket.section_id, ticket._id));
 
   // 3. Update ticket status
   ticket.status = TicketStatus.CONFIRMED;
@@ -33,10 +34,10 @@ export const confirmTicketPurchase = async (ticketId) => {
   await ticket.save();
 
   // 4. Check if section is now sold out
-  if (section && section.capacity - section.sold_count - section.held_count <= 0) {
+  if (section && getAvailableSeats(section) <= 0) {
     const eventSections = await Section.findActive({ event_id: ticket.event_id });
     const allSoldOut = eventSections.every(
-      (s) => s.capacity - s.sold_count - s.held_count <= 0
+      (s) => getAvailableSeats(s) <= 0
     );
     if (allSoldOut) {
       await Event.findByIdAndUpdate(ticket.event_id, { status: EventStatus.SOLD_OUT });

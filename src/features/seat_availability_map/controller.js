@@ -1,6 +1,7 @@
 import { Section } from '../../models/Section.js';
 import { Event } from '../../models/Event.js';
-import { getPricingTier, roundMoney } from '../../utils/helpers.js';
+import { getPricingTier, roundMoney, getAvailableSeats } from '../../utils/helpers.js';
+import { SERVICE_FEE_RATE, FACILITY_FEE_RATE } from '../../services/pricing.service.js';
 
 export const getSeatAvailabilityMap = async (req, res) => {
   const { id: eventId, sectionId } = req.params;
@@ -15,7 +16,7 @@ export const getSeatAvailabilityMap = async (req, res) => {
     return res.status(404).json({ error: 'event not found' });
   }
 
-  const available = Math.max(0, section.capacity - section.sold_count - section.held_count);
+  const available = getAvailableSeats(section);
   const sellThroughPct = section.capacity > 0
     ? roundMoney((section.sold_count / section.capacity) * 100)
     : 0;
@@ -39,8 +40,8 @@ export const getSeatAvailabilityMap = async (req, res) => {
       multiplier: tier.multiplier,
       tier: tier.label,
       current_price: currentPrice,
-      service_fee: roundMoney(currentPrice * 0.12),
-      facility_fee: roundMoney(currentPrice * 0.05),
+      service_fee: roundMoney(currentPrice * SERVICE_FEE_RATE),
+      facility_fee: roundMoney(currentPrice * FACILITY_FEE_RATE),
     },
     status: available > 0 ? 'available' : 'sold_out',
   });

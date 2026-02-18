@@ -1,6 +1,7 @@
 import { Event, EventStatus } from '../../models/Event.js';
 import { Venue } from '../../models/Venue.js';
 import { Section } from '../../models/Section.js';
+import { getAvailableSeats } from '../../utils/helpers.js';
 
 export const getEventSchedule = async (req, res) => {
   const { start_date, end_date } = req.query;
@@ -60,7 +61,7 @@ export const getEventSchedule = async (req, res) => {
         }
       : { min: 0, max: 0 };
     const totalAvailable = eventSections.reduce(
-      (sum, s) => sum + Math.max(0, s.capacity - s.sold_count - s.held_count),
+      (sum, s) => sum + getAvailableSeats(s),
       0
     );
 

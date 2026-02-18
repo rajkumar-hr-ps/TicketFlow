@@ -1,12 +1,12 @@
 import { Section } from '../models/Section.js';
 import { NotFoundError } from '../utils/AppError.js';
-import { getPricingTier, roundMoney } from '../utils/helpers.js';
+import { getPricingTier, roundMoney, getAvailableSeats } from '../utils/helpers.js';
 
 export const getSectionsByEvent = async (eventId) => {
   const sections = await Section.findActive({ event_id: eventId });
   return sections.map((s) => ({
     ...s.toObject(),
-    available: Math.max(0, s.capacity - s.sold_count - s.held_count),
+    available: getAvailableSeats(s),
   }));
 };
 
@@ -16,7 +16,7 @@ export const getSectionAvailability = async (eventId, sectionId) => {
     throw new NotFoundError('Section not found');
   }
 
-  const available = Math.max(0, section.capacity - section.sold_count - section.held_count);
+  const available = getAvailableSeats(section);
   const sellThrough = section.capacity > 0 ? section.sold_count / section.capacity : 0;
   const tier = getPricingTier(sellThrough);
   const currentPrice = roundMoney(section.base_price * tier.multiplier);

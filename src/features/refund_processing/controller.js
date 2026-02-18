@@ -4,7 +4,7 @@ import { Ticket, TicketStatus } from '../../models/Ticket.js';
 import { Section } from '../../models/Section.js';
 import { Payment, PaymentStatus, PaymentType } from '../../models/Payment.js';
 import { PromoCode } from '../../models/PromoCode.js';
-import { roundMoney } from '../../utils/helpers.js';
+import { roundMoney, idempotencyKey } from '../../utils/helpers.js';
 import { getRefundTier } from '../../services/pricing.service.js';
 
 export const processRefund = async (req, res) => {
@@ -76,7 +76,7 @@ export const processRefund = async (req, res) => {
     amount: totalRefund,
     type: PaymentType.REFUND,
     status: PaymentStatus.COMPLETED,
-    idempotency_key: `refund_${orderId}_${Date.now()}`,
+    idempotency_key: idempotencyKey.refund(orderId),
   });
 
   order.status = OrderStatus.REFUNDED;

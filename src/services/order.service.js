@@ -9,7 +9,8 @@ import { redisClient } from '../config/redis.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 import * as pricingService from './pricing.service.js';
 import * as promoCodeService from './promoCode.service.js';
-import { roundMoney } from '../utils/helpers.js';
+import { holdKey, HOLD_TTL_SECONDS, HOLD_TTL_MS } from './hold.service.js';
+import { roundMoney, getAvailableSeats, idempotencyKey as idempotencyKeyGen } from '../utils/helpers.js';
 
 // --- Bug 1 Solution: Full pricing pipeline via pricingService ---
 export const createOrder = async (userId, data) => {
@@ -48,7 +49,7 @@ export const createOrder = async (userId, data) => {
   const section = await Section.findOneActive({ _id: section_id });
   if (!section) throw new NotFoundError('section not found');
 
-  const available = section.capacity - section.sold_count - section.held_count;
+  const available = getAvailableSeats(section);
   if (available < quantity) {
     throw new BadRequestError(`insufficient capacity in section ${section.name}`);
   }
@@ -58,7 +59,7 @@ export const createOrder = async (userId, data) => {
 
   // Create tickets
   const tickets = [];
-  const holdExpiry = new Date(Date.now() + 5 * 60 * 1000);
+  const holdExpiry = new Date(Date.now() + HOLD_TTL_MS);
 
   for (let i = 0; i < quantity; i++) {
     const ticket = await Ticket.create({
@@ -73,7 +74,7 @@ export const createOrder = async (userId, data) => {
       hold_expires_at: holdExpiry,
     });
     tickets.push(ticket);
-    await redisClient.set(`hold:${section_id}:${ticket._id}`, '1', 'EX', 300);
+    await redisClient.set(holdKey(section_id, ticket._id), '1', 'EX', HOLD_TTL_SECONDS);
   }
 
   // Atomically increment promo usage
@@ -101,7 +102,7 @@ export const createOrder = async (userId, data) => {
     promo_code_id: promoId,
     status: OrderStatus.PENDING,
     payment_status: OrderPaymentStatus.PENDING,
-    idempotency_key: idempotency_key || `order_${userId}_${event_id}_${Date.now()}`,
+    idempotency_key: idempotency_key || idempotencyKeyGen.order(userId, event_id),
   });
 
   // Create payment record
@@ -111,7 +112,7 @@ export const createOrder = async (userId, data) => {
     amount: pricing.total_amount,
     type: PaymentType.PURCHASE,
     status: PaymentStatus.PENDING,
-    idempotency_key: `payment_${order._id}_${Date.now()}`,
+    idempotency_key: idempotencyKeyGen.payment(order._id),
   });
 
   return {
@@ -185,13 +186,13 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
             unit_price: unitPrice,
             service_fee: serviceFee,
             facility_fee: facilityFee,
-            hold_expires_at: new Date(Date.now() + 5 * 60 * 1000),
+            hold_expires_at: new Date(Date.now() + HOLD_TTL_MS),
           }],
           { session }
         );
 
         createdTickets.push(ticket[0]);
-        redisHoldKeys.push(`hold:${req.section_id}:${ticket[0]._id}`);
+        redisHoldKeys.push(holdKey(req.section_id, ticket[0]._id));
       }
 
       totalSubtotal += roundMoney(unitPrice * req.quantity);
@@ -215,7 +216,7 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
         total_amount: totalAmount,
         status: OrderStatus.PENDING,
         payment_status: OrderPaymentStatus.PENDING,
-        idempotency_key: idempotencyKey || `order_${userId}_${eventId}_${Date.now()}`,
+        idempotency_key: idempotencyKey || idempotencyKeyGen.order(userId, eventId),
       }],
       { session }
     );
@@ -223,8 +224,8 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
     await session.commitTransaction();
 
     // Set Redis holds AFTER successful commit
-    for (const holdKey of redisHoldKeys) {
-      await redisClient.set(holdKey, '1', 'EX', 300);
+    for (const key of redisHoldKeys) {
+      await redisClient.set(key, '1', 'EX', HOLD_TTL_SECONDS);
     }
 
     return {
@@ -324,7 +325,7 @@ export const processRefund = async (orderId, userId) => {
     amount: totalRefund,
     type: PaymentType.REFUND,
     status: PaymentStatus.COMPLETED,
-    idempotency_key: `refund_${orderId}_${Date.now()}`,
+    idempotency_key: idempotencyKeyGen.refund(orderId),
   });
 
   order.status = OrderStatus.REFUNDED;

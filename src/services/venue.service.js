@@ -21,7 +21,7 @@ export const getVenues = async () => {
 
   const venues = await Venue.findActive().sort({ created_at: -1 });
 
-  await cacheService.setCache('venues:all', venues, 300);
+  await cacheService.setCache('venues:all', venues, cacheService.CACHE_TTL.VENUES);
 
   return venues;
 };
