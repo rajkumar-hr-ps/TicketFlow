@@ -1,0 +1,44 @@
+{
+  "name": "ticketflow",
+  "version": "1.0.0",
+  "description": "Event Ticketing Platform — TicketFlow",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "pretest": "npm install",
+    "test": "cross-env NODE_ENV=test mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json --exit",
+    "test:task1": "cross-env NODE_ENV=test PORT=8081 MOCHA_FILE=../output/task1.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task1/*.js --exit",
+    "test:task2": "cross-env NODE_ENV=test PORT=8082 MOCHA_FILE=../output/task2.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task2/*.js --exit",
+    "test:task3": "cross-env NODE_ENV=test PORT=8083 MOCHA_FILE=../output/task3.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task3/*.js --exit",
+    "test:task4": "cross-env NODE_ENV=test PORT=8084 MOCHA_FILE=../output/task4.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task4/*.js --exit",
+    "test:task5": "cross-env NODE_ENV=test PORT=8085 MOCHA_FILE=../output/task5.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task5/*.js --exit",
+    "test:task6": "cross-env NODE_ENV=test PORT=8086 MOCHA_FILE=../output/task6.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task6/*.js --exit",
+    "test:task7": "cross-env NODE_ENV=test PORT=8087 MOCHA_FILE=../output/task7.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task7/*.js --exit",
+    "test:task8": "cross-env NODE_ENV=test PORT=8088 MOCHA_FILE=../output/task8.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task8/*.js --exit",
+    "test:task9": "cross-env NODE_ENV=test PORT=8089 MOCHA_FILE=../output/task9.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task9/*.js --exit",
+    "test:task10": "cross-env NODE_ENV=test PORT=8090 MOCHA_FILE=../output/task10.xml mocha --reporter mocha-multi-reporters --reporter-options configFile=config.json test/task10/*.js --exit"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.34.8",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "ioredis": "^5.4.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^9.1.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "chai": "^5.1.2",
+    "chai-http": "^5.1.1",
+    "cross-env": "^7.0.3",
+    "mocha": "^11.1.0",
+    "mocha-junit-reporter": "^2.2.1",
+    "mocha-multi-reporters": "^1.5.1",
+    "supertest": "^7.0.0"
+  }
+}
