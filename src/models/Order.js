@@ -6,7 +6,6 @@ export const OrderStatus = {
   CONFIRMED: 'confirmed',
   CANCELLED: 'cancelled',
   REFUNDED: 'refunded',
-  PARTIALLY_REFUNDED: 'partially_refunded',
 };
 
 export const OrderPaymentStatus = {

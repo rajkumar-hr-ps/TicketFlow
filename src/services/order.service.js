@@ -9,7 +9,7 @@ import { redisClient } from '../config/redis.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 import * as pricingService from './pricing.service.js';
 import * as promoCodeService from './promoCode.service.js';
-import { holdKey, HOLD_TTL_SECONDS, HOLD_TTL_MS } from './hold.service.js';
+import { holdKey, createHold, HOLD_TTL_SECONDS, HOLD_TTL_MS } from './hold.service.js';
 import { roundMoney, getAvailableSeats, idempotencyKey as idempotencyKeyGen } from '../utils/helpers.js';
 
 // --- Bug 1 Solution: Full pricing pipeline via pricingService ---
@@ -47,7 +47,9 @@ export const createOrder = async (userId, data) => {
   let promoCode = null;
   if (promo_code) {
     const result = await promoCodeService.validatePromoCode(promo_code, event_id, quantity);
-    promoCode = result.promo;
+    if (result.valid) {
+      promoCode = result.promo;
+    }
   }
 
   // Calculate full pricing pipeline (Bug 1 solution)
@@ -86,7 +88,7 @@ export const createOrder = async (userId, data) => {
       hold_expires_at: holdExpiry,
     });
     tickets.push(ticket);
-    await redisClient.set(holdKey(section_id, ticket._id), '1', 'EX', HOLD_TTL_SECONDS);
+    await createHold(section_id, ticket._id);
   }
 
   // Atomically increment promo usage
@@ -146,6 +148,16 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
   const event = await Event.findOneActive({ _id: eventId, status: EventStatus.ON_SALE });
   if (!event) {
     throw new NotFoundError('event not available');
+  }
+
+  // Validate promo code
+  const totalQuantity = sectionRequests.reduce((sum, r) => sum + r.quantity, 0);
+  let promoCode = null;
+  if (promoCodeStr) {
+    const result = await promoCodeService.validatePromoCode(promoCodeStr, eventId, totalQuantity);
+    if (result.valid) {
+      promoCode = result.promo;
+    }
   }
 
   const session = await mongoose.startSession();
@@ -218,7 +230,28 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
     }
 
     const processingFee = pricingService.PROCESSING_FEE;
-    const totalAmount = roundMoney(totalSubtotal + totalServiceFee + totalFacilityFee + processingFee);
+
+    // Apply promo code discount
+    let discountAmount = 0;
+    let promoId = null;
+    if (promoCode) {
+      if (promoCode.discount_type === 'percentage') {
+        discountAmount = roundMoney(totalSubtotal * (promoCode.discount_value / 100));
+        if (promoCode.max_discount_amount) {
+          discountAmount = Math.min(discountAmount, promoCode.max_discount_amount);
+        }
+      } else {
+        discountAmount = Math.min(promoCode.discount_value, totalSubtotal);
+      }
+      await PromoCode.findOneAndUpdate(
+        { _id: promoCode._id, current_uses: { $lt: promoCode.max_uses } },
+        { $inc: { current_uses: 1 } },
+        { session }
+      );
+      promoId = promoCode._id;
+    }
+
+    const totalAmount = roundMoney(totalSubtotal + totalServiceFee + totalFacilityFee + processingFee - discountAmount);
 
     const order = await Order.create(
       [{
@@ -231,7 +264,9 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
         service_fee_total: totalServiceFee,
         facility_fee_total: totalFacilityFee,
         processing_fee: processingFee,
+        discount_amount: discountAmount,
         total_amount: totalAmount,
+        promo_code_id: promoId,
         status: OrderStatus.PENDING,
         payment_status: OrderPaymentStatus.PENDING,
         idempotency_key: idempotencyKey || idempotencyKeyGen.order(userId, eventId),
@@ -246,8 +281,23 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
       await redisClient.set(key, '1', 'EX', HOLD_TTL_SECONDS);
     }
 
+    // Create payment record
+    await Payment.create({
+      order_id: order[0]._id,
+      user_id: userId,
+      amount: totalAmount,
+      type: PaymentType.PURCHASE,
+      status: PaymentStatus.PENDING,
+      idempotency_key: idempotencyKeyGen.payment(order[0]._id),
+    });
+
     return {
       order: order[0],
+      subtotal: totalSubtotal,
+      service_fee_total: totalServiceFee,
+      facility_fee_total: totalFacilityFee,
+      processing_fee: processingFee,
+      discount_amount: discountAmount,
       total_amount: totalAmount,
     };
   } catch (error) {
@@ -289,7 +339,7 @@ export const processRefund = async (orderId, userId) => {
     throw new NotFoundError('order not found');
   }
 
-  if (![OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_REFUNDED].includes(order.status)) {
+  if (order.status !== OrderStatus.CONFIRMED) {
     throw new BadRequestError('order is not eligible for refund');
   }
 

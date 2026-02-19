@@ -133,7 +133,7 @@ const swaggerDefinition = {
           promo_code_id: { type: 'string', nullable: true },
           status: {
             type: 'string',
-            enum: ['pending', 'confirmed', 'cancelled', 'refunded', 'partially_refunded'],
+            enum: ['pending', 'confirmed', 'cancelled', 'refunded'],
           },
           payment_status: {
             type: 'string',

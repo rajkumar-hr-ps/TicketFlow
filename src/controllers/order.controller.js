@@ -15,3 +15,12 @@ export const getOrderById = async (req, res) => {
   res.json({ order });
 };
 
+// WARNING: This route conflicts with features/refund_processing/routes.js
+// which also mounts POST /:id/refund on /orders. Resolve the duplication
+// before enabling both — currently the feature route takes precedence
+// since it is mounted after this in routes/index.js.
+export const processRefund = async (req, res) => {
+  const result = await orderService.processRefund(req.params.id, req.user._id);
+  res.json(result);
+};
+

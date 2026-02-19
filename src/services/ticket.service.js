@@ -2,10 +2,9 @@ import crypto from 'crypto';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
 import { Section } from '../models/Section.js';
 import { Event, EventStatus } from '../models/Event.js';
-import { redisClient } from '../config/redis.js';
 import { config } from '../config/env.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
-import { holdKey } from './hold.service.js';
+import { removeHold } from './hold.service.js';
 import { getAvailableSeats } from '../utils/helpers.js';
 
 // --- Bug 3 Solution: Hold-to-purchase with counter transitions ---
@@ -25,7 +24,7 @@ export const confirmTicketPurchase = async (ticketId) => {
   );
 
   // 2. Clean up Redis hold key
-  await redisClient.del(holdKey(ticket.section_id, ticket._id));
+  await removeHold(ticket.section_id, ticket._id);
 
   // 3. Update ticket status
   ticket.status = TicketStatus.CONFIRMED;
@@ -66,7 +65,7 @@ export const confirmOrderTickets = async (orderId) => {
   for (const ticket of tickets) {
     const sid = ticket.section_id.toString();
     sectionCounts[sid] = (sectionCounts[sid] || 0) + 1;
-    await redisClient.del(holdKey(ticket.section_id, ticket._id));
+    await removeHold(ticket.section_id, ticket._id);
   }
 
   const updatedSections = [];
@@ -89,7 +88,13 @@ export const confirmOrderTickets = async (orderId) => {
 };
 
 // --- Bug 7 Solution: HMAC barcode generation and verification ---
-export const generateBarcode = (ticketId, userId, eventId) => {
+export const generateBarcodeForTicket = async (ticketId) => {
+  const ticket = await Ticket.findOneActive({ _id: ticketId });
+  if (!ticket) throw new NotFoundError('ticket not found');
+  return { barcode: generateBarcode(ticket._id, ticket.user_id, ticket.event_id) };
+};
+
+const generateBarcode = (ticketId, userId, eventId) => {
   const payload = {
     tid: ticketId.toString(),
     uid: userId.toString(),

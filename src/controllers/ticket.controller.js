@@ -6,13 +6,8 @@ export const confirmTicket = async (req, res) => {
 };
 
 export const generateBarcode = async (req, res) => {
-  const { Ticket } = await import('../models/Ticket.js');
-  const ticket = await Ticket.findById(req.params.id);
-  if (!ticket) {
-    return res.status(404).json({ error: 'ticket not found' });
-  }
-  const barcode = ticketService.generateBarcode(ticket._id, ticket.user_id, ticket.event_id);
-  res.json({ barcode });
+  const result = await ticketService.generateBarcodeForTicket(req.params.id);
+  res.json(result);
 };
 
 export const verifyBarcode = async (req, res) => {

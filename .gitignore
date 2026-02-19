@@ -4,3 +4,4 @@ unit.xml
 output/
 *.log
 .claude/
+poc/

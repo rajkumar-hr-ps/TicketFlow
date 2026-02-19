@@ -10,7 +10,8 @@ export const getCache = async (key) => {
   try {
     const data = await redisClient.get(key);
     return data ? JSON.parse(data) : null;
-  } catch {
+  } catch (err) {
+    console.warn(`[cache] getCache failed for key="${key}":`, err.message);
     return null;
   }
 };
@@ -18,8 +19,8 @@ export const getCache = async (key) => {
 export const setCache = async (key, data, ttlSeconds = 300) => {
   try {
     await redisClient.set(key, JSON.stringify(data), 'EX', ttlSeconds);
-  } catch {
-    // Cache failures shouldn't break the application
+  } catch (err) {
+    console.warn(`[cache] setCache failed for key="${key}":`, err.message);
   }
 };
 
@@ -29,7 +30,7 @@ export const invalidateCache = async (pattern) => {
     if (keys.length > 0) {
       await redisClient.del(...keys);
     }
-  } catch {
-    // Cache failures shouldn't break the application
+  } catch (err) {
+    console.warn(`[cache] invalidateCache failed for pattern="${pattern}":`, err.message);
   }
 };

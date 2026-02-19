@@ -6,10 +6,9 @@ import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
 import { Payment, PaymentStatus, PaymentType } from '../models/Payment.js';
 import { PromoCode } from '../models/PromoCode.js';
-import { redisClient } from '../config/redis.js';
 import { BadRequestError, NotFoundError, ConflictError } from '../utils/AppError.js';
 import * as cacheService from './cache.service.js';
-import { holdKey } from './hold.service.js';
+import { removeHold } from './hold.service.js';
 import { roundMoney, getAvailableSeats, idempotencyKey } from '../utils/helpers.js';
 
 const BUFFER_HOURS = 4;
@@ -211,7 +210,7 @@ export const updateEventStatus = async (eventId, newStatus, userId) => {
 };
 
 // --- Bug 9 Solution: Event cancellation with bulk refund cascade ---
-export const cancelEvent = async (eventId, organizerId) => {
+const cancelEvent = async (eventId, organizerId) => {
   const event = await Event.findOneActive({ _id: eventId, organizer_id: organizerId });
   if (!event) {
     throw new NotFoundError('event not found or unauthorized');
@@ -228,7 +227,7 @@ export const cancelEvent = async (eventId, organizerId) => {
   // 2. Process refunds for all active orders
   const orders = await Order.find({
     event_id: eventId,
-    status: { $in: [OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_REFUNDED] },
+    status: OrderStatus.CONFIRMED,
     deleted_at: null,
   });
 
@@ -297,7 +296,7 @@ export const cancelEvent = async (eventId, organizerId) => {
     deleted_at: null,
   });
   for (const held of heldTickets) {
-    await redisClient.del(holdKey(held.section_id, held._id));
+    await removeHold(held.section_id, held._id);
   }
   await Ticket.updateMany(
     { event_id: eventId, status: TicketStatus.HELD },

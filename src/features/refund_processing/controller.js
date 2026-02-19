@@ -16,7 +16,7 @@ export const processRefund = async (req, res) => {
     return res.status(404).json({ error: 'order not found' });
   }
 
-  if (![OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_REFUNDED].includes(order.status)) {
+  if (order.status !== OrderStatus.CONFIRMED) {
     return res.status(400).json({ error: 'order is not eligible for refund' });
   }
 

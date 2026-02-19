@@ -17,13 +17,3 @@ export const removeHold = async (sectionId, ticketId) => {
   return key;
 };
 
-export const checkHold = async (sectionId, ticketId) => {
-  const key = holdKey(sectionId, ticketId);
-  const exists = await redisClient.exists(key);
-  return exists === 1;
-};
-
-export const getHoldTTL = async (sectionId, ticketId) => {
-  const key = holdKey(sectionId, ticketId);
-  return redisClient.ttl(key);
-};
