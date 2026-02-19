@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
 import { Section } from '../models/Section.js';
 import { Event, EventStatus } from '../models/Event.js';
-import { User } from '../models/User.js';
 import { redisClient } from '../config/redis.js';
 import { config } from '../config/env.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
@@ -10,7 +9,6 @@ import { holdKey } from './hold.service.js';
 import { getAvailableSeats } from '../utils/helpers.js';
 
 // --- Bug 3 Solution: Hold-to-purchase with counter transitions ---
-//TODO: NOT IN USE
 export const confirmTicketPurchase = async (ticketId) => {
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) throw new NotFoundError('ticket not found');
@@ -48,67 +46,49 @@ export const confirmTicketPurchase = async (ticketId) => {
   return ticket;
 };
 
-// --- Bug 5 Solution: Ticket transfer with full ownership chain ---
-//TODO: NOT IN USE
-export const transferTicket = async (ticketId, fromUserId, toEmail) => {
-  const ticket = await Ticket.findOneActive({ _id: ticketId, user_id: fromUserId });
-  if (!ticket) {
-    throw new NotFoundError('ticket not found or not owned by you');
-  }
-
-  // 1. Validate ticket is transferable
-  if (ticket.status !== TicketStatus.CONFIRMED) {
-    throw new BadRequestError('only confirmed tickets can be transferred');
-  }
-
-  // 2. Check event hasn't started
-  const event = await Event.findOneActive({ _id: ticket.event_id });
-  if (!event) throw new BadRequestError('event not found');
-  if (new Date(event.start_date) <= new Date()) {
-    throw new BadRequestError('cannot transfer tickets for events that have started');
-  }
-
-  // 3. Find and verify recipient
-  if (!toEmail) throw new BadRequestError('recipient email is required');
-  const toUser = await User.findOneActive({ email: toEmail.toLowerCase() });
-  if (!toUser) throw new NotFoundError('recipient user not found');
-
-  // 4. Prevent self-transfer
-  if (toUser._id.toString() === fromUserId.toString()) {
-    throw new BadRequestError('cannot transfer ticket to yourself');
-  }
-
-  // 5. Invalidate original ticket
-  ticket.status = TicketStatus.TRANSFERRED;
-  ticket.transferred_at = new Date();
-  await ticket.save();
-
-  // 6. Create new ticket for recipient
-  const newTicket = await Ticket.create({
-    order_id: ticket.order_id,
-    event_id: ticket.event_id,
-    section_id: ticket.section_id,
-    user_id: toUser._id,
-    original_user_id: ticket.original_user_id,
-    status: TicketStatus.CONFIRMED,
-    unit_price: ticket.unit_price,
-    service_fee: ticket.service_fee,
-    facility_fee: ticket.facility_fee,
+// --- Batch confirm all held tickets for an order ---
+export const confirmOrderTickets = async (orderId) => {
+  const tickets = await Ticket.find({
+    order_id: orderId,
+    status: TicketStatus.HELD,
+    deleted_at: null,
   });
+  if (tickets.length === 0) return;
 
-  return {
-    transfer_id: `xfer_${ticket._id}_${newTicket._id}`,
-    original_ticket_id: ticket._id,
-    new_ticket_id: newTicket._id,
-    from_user: fromUserId,
-    to_user: toUser._id,
-    to_email: toEmail.toLowerCase(),
-    transferred_at: ticket.transferred_at,
-  };
+  // 1. Update all ticket statuses
+  await Ticket.updateMany(
+    { _id: { $in: tickets.map((t) => t._id) } },
+    { $set: { status: TicketStatus.CONFIRMED, hold_expires_at: null } }
+  );
+
+  // 2. Aggregate section counts and transition counters + clean Redis holds
+  const sectionCounts = {};
+  for (const ticket of tickets) {
+    const sid = ticket.section_id.toString();
+    sectionCounts[sid] = (sectionCounts[sid] || 0) + 1;
+    await redisClient.del(holdKey(ticket.section_id, ticket._id));
+  }
+
+  const updatedSections = [];
+  for (const [sectionId, count] of Object.entries(sectionCounts)) {
+    const section = await Section.findByIdAndUpdate(
+      sectionId,
+      { $inc: { held_count: -count, sold_count: count } },
+      { new: true }
+    );
+    if (section) updatedSections.push(section);
+  }
+
+  // 3. Check if all sections for the event are sold out
+  const eventId = tickets[0].event_id;
+  const eventSections = await Section.findActive({ event_id: eventId });
+  const allSoldOut = eventSections.every((s) => getAvailableSeats(s) <= 0);
+  if (allSoldOut) {
+    await Event.findByIdAndUpdate(eventId, { status: EventStatus.SOLD_OUT });
+  }
 };
 
 // --- Bug 7 Solution: HMAC barcode generation and verification ---
-//TODO: NOT IN USE
 export const generateBarcode = (ticketId, userId, eventId) => {
   const payload = {
     tid: ticketId.toString(),
@@ -128,7 +108,6 @@ export const generateBarcode = (ticketId, userId, eventId) => {
   return `${payloadB64}.${signature}`;
 };
 
-//TODO: NOT IN USE
 export const verifyBarcode = async (barcode) => {
   const parts = barcode.split('.');
   if (parts.length !== 2) {

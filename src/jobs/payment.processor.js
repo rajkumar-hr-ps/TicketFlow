@@ -1,8 +1,8 @@
 import { Worker } from 'bullmq';
 import { Payment, PaymentStatus } from '../models/Payment.js';
 import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
-import { Ticket, TicketStatus } from '../models/Ticket.js';
 import { config, JOB_CONCURRENCY } from '../config/env.js';
+import { confirmOrderTickets } from '../services/ticket.service.js';
 
 const connection = {
   host: new URL(config.redisUrl).hostname || 'localhost',
@@ -34,11 +34,8 @@ const paymentWorker = new Worker(
       order.payment_status = OrderPaymentStatus.PAID;
       await order.save();
 
-      // Confirm all held tickets
-      await Ticket.updateMany(
-        { order_id: order._id, status: TicketStatus.HELD },
-        { $set: { status: TicketStatus.CONFIRMED } }
-      );
+      // Confirm all held tickets with counter transitions
+      await confirmOrderTickets(order._id);
     }
 
     return { payment_id, status: PaymentStatus.COMPLETED };

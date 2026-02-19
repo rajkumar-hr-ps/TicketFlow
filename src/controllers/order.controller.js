@@ -15,7 +15,3 @@ export const getOrderById = async (req, res) => {
   res.json({ order });
 };
 
-export const processRefund = async (req, res) => {
-  const result = await orderService.processRefund(req.params.id, req.user._id);
-  res.json(result);
-};

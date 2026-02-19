@@ -112,7 +112,7 @@ export const getEvents = async (filters = {}) => {
   const cached = await cacheService.getCache(cacheKey);
   if (cached) return cached;
 
-  const query = { deleted_at: null };
+  const query = {};
   if (status) {
     const statuses = status.split(',');
     query.status = statuses.length > 1 ? { $in: statuses } : status;
@@ -125,8 +125,8 @@ export const getEvents = async (filters = {}) => {
   const skip = (pageNum - 1) * limitNum;
 
   const [events, total] = await Promise.all([
-    Event.find(query).sort({ start_date: 1 }).skip(skip).limit(limitNum).lean(),
-    Event.countDocuments(query),
+    Event.findActive(query).sort({ start_date: 1 }).skip(skip).limit(limitNum).lean(),
+    Event.countActive(query),
   ]);
 
   const result = {

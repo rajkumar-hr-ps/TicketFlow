@@ -1,30 +1,14 @@
 import crypto from 'crypto';
 import { Payment, PaymentStatus } from '../models/Payment.js';
 import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
-import { Ticket, TicketStatus } from '../models/Ticket.js';
 import { WebhookLog } from '../models/WebhookLog.js';
 import { config } from '../config/env.js';
 import { NotFoundError, UnauthorizedError, BadRequestError } from '../utils/AppError.js';
+import { confirmOrderTickets } from './ticket.service.js';
 
 export const getPaymentsByOrder = async (orderId) => {
   const payments = await Payment.findActive({ order_id: orderId }).sort({ created_at: -1 });
   return payments;
-};
-
-//TODO: NOT IN USE
-export const createPayment = async (data) => {
-  const payment = new Payment(data);
-  await payment.save();
-  return payment;
-};
-
-//TODO: NOT IN USE
-export const getPaymentById = async (paymentId) => {
-  const payment = await Payment.findOneActive({ _id: paymentId });
-  if (!payment) {
-    throw new NotFoundError('Payment not found');
-  }
-  return payment;
 };
 
 const VALID_STATUS_TRANSITIONS = {
@@ -76,11 +60,11 @@ export const processWebhook = async (signature, body) => {
     received_at: new Date(),
   });
 
-  // Find payment and order
-  const payment = await Payment.findById(payment_id);
+  // Find payment and order (soft-delete safe)
+  const payment = await Payment.findOneActive({ _id: payment_id });
   if (!payment) throw new NotFoundError('payment not found');
 
-  const order = await Order.findById(payment.order_id);
+  const order = await Order.findOneActive({ _id: payment.order_id });
   if (!order) throw new NotFoundError('order not found');
 
   // Verify amount matches order total
@@ -113,10 +97,7 @@ export const processWebhook = async (signature, body) => {
     order.payment_status = OrderPaymentStatus.PAID;
     await order.save();
 
-    await Ticket.updateMany(
-      { order_id: order._id, status: TicketStatus.HELD },
-      { $set: { status: TicketStatus.CONFIRMED } }
-    );
+    await confirmOrderTickets(order._id);
   } else if (status === PaymentStatus.FAILED) {
     order.payment_status = OrderPaymentStatus.FAILED;
     await order.save();

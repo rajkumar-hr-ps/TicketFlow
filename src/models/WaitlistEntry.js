@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { softDeletePlugin } from '../utils/softDelete.plugin.js';
 
 export const WaitlistStatus = {
   WAITING: 'waiting',
@@ -39,5 +40,7 @@ const waitlistEntrySchema = new mongoose.Schema(
 
 waitlistEntrySchema.index({ event_id: 1, user_id: 1 });
 waitlistEntrySchema.index({ event_id: 1, position: 1 });
+
+waitlistEntrySchema.plugin(softDeletePlugin);
 
 export const WaitlistEntry = mongoose.model('WaitlistEntry', waitlistEntrySchema);

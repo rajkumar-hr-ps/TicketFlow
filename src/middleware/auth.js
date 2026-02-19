@@ -20,7 +20,7 @@ export const auth = async (req, res, next) => {
     throw new UnauthorizedError('Invalid token');
   }
 
-  const user = await User.findById(decoded.userId);
+  const user = await User.findOneActive({ _id: decoded.userId });
   if (!user) {
     throw new UnauthorizedError('User not found');
   }

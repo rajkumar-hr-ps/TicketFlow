@@ -5,6 +5,7 @@ import { swaggerSpec } from './config/swagger.js';
 import { router as routes } from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { sanitize } from './middleware/sanitize.js';
+import { rateLimiter } from './middleware/rateLimiter.js';
 
 export const app = express();
 
@@ -17,6 +18,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // 3. Global middleware
 app.use(sanitize);
+app.use(rateLimiter());
 
 // 4. Routes
 app.use('/api/v1', routes);

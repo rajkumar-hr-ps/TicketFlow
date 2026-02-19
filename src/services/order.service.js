@@ -20,6 +20,14 @@ export const createOrder = async (userId, data) => {
     throw new BadRequestError('event_id is required');
   }
 
+  // Idempotency: return existing order if key already used
+  if (idempotency_key) {
+    const existing = await Order.findOneActive({ idempotency_key });
+    if (existing) {
+      return { order: existing, total_amount: existing.total_amount };
+    }
+  }
+
   // Multi-section order (Bug 10)
   if (sectionRequests && Array.isArray(sectionRequests) && sectionRequests.length > 0) {
     return createMultiSectionOrder(userId, event_id, sectionRequests, promo_code, idempotency_key);
