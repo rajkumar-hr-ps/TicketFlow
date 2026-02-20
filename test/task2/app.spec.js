@@ -10,7 +10,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -22,7 +22,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -85,7 +85,7 @@ describe('Bug 2 — Event Status State Machine', function () {
   });
 
   beforeEach(async () => {
-    await cleanupModels([Payment, Ticket, Order, PromoCode, Section, Event]);
+    await cleanupModels([Payment, Ticket, Order, PromoCode, VenueSection, Event]);
   });
 
   after(async () => {
@@ -125,7 +125,7 @@ describe('Bug 2 — Event Status State Machine', function () {
     });
     await event.save();
 
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'General',
@@ -156,7 +156,7 @@ describe('Bug 2 — Event Status State Machine', function () {
     });
     await event.save();
 
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'General',
@@ -173,6 +173,10 @@ describe('Bug 2 — Event Status State Machine', function () {
 
     expect(res).to.have.status(200);
     expect(res.body.event).to.have.property('status', 'published');
+
+    // DB verification
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('published');
   });
 
   // --- Test 04: reject invalid transition draft -> on_sale ---
@@ -188,7 +192,7 @@ describe('Bug 2 — Event Status State Machine', function () {
     });
     await event.save();
 
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'General',
@@ -205,6 +209,10 @@ describe('Bug 2 — Event Status State Machine', function () {
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('cannot transition');
+
+    // DB verification: status unchanged
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('draft');
   });
 
   // --- Test 05: reject transition from completed (terminal state) ---
@@ -227,6 +235,10 @@ describe('Bug 2 — Event Status State Machine', function () {
       .send({ status: 'on_sale' });
 
     expect(res).to.have.status(400);
+
+    // DB verification: status unchanged
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('completed');
   });
 
   // --- Test 06: reject transition from cancelled (terminal state) ---
@@ -249,6 +261,10 @@ describe('Bug 2 — Event Status State Machine', function () {
       .send({ status: 'published' });
 
     expect(res).to.have.status(400);
+
+    // DB verification: status unchanged
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('cancelled');
   });
 
   // --- Test 07: require sections to publish ---
@@ -272,6 +288,10 @@ describe('Bug 2 — Event Status State Machine', function () {
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('without sections');
+
+    // DB verification: status unchanged
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('draft');
   });
 
   // --- Test 08: reject completing event before end date ---
@@ -295,5 +315,126 @@ describe('Bug 2 — Event Status State Machine', function () {
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('before its end date');
+
+    // DB verification: status unchanged
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('on_sale');
+  });
+
+  // --- Test 09: should transition from published to on_sale ---
+  it('should transition from published to on_sale', async () => {
+    const event = new Event({
+      title: 'Published to OnSale Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000),
+      status: 'published',
+      category: 'concert',
+    });
+    await event.save();
+
+    const section = new VenueSection({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'General',
+      capacity: 100,
+      base_price: 50,
+    });
+    await section.save();
+
+    const res = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'on_sale' });
+
+    expect(res).to.have.status(200);
+    expect(res.body.event).to.have.property('status', 'on_sale');
+
+    // DB verification
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('on_sale');
+  });
+
+  // --- Test 10: should transition from on_sale to cancelled ---
+  it('should transition from on_sale to cancelled', async () => {
+    const event = new Event({
+      title: 'OnSale to Cancelled Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000),
+      status: 'on_sale',
+      category: 'concert',
+    });
+    await event.save();
+
+    const res = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'cancelled' });
+
+    expect(res).to.have.status(200);
+    expect(res.body.event || res.body).to.have.property('status', 'cancelled');
+
+    // DB verification
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('cancelled');
+  });
+
+  // --- Test 11: should transition from on_sale to completed (past end_date) ---
+  it('should transition from on_sale to completed (past end_date)', async () => {
+    const event = new Event({
+      title: 'OnSale to Completed Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      status: 'on_sale',
+      category: 'concert',
+    });
+    await event.save();
+
+    const res = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'completed' });
+
+    expect(res).to.have.status(200);
+    expect(res.body.event || res.body).to.have.property('status', 'completed');
+
+    // DB verification
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('completed');
+  });
+
+  // --- Test 12: should transition from published to cancelled ---
+  it('should transition from published to cancelled', async () => {
+    const event = new Event({
+      title: 'Published to Cancelled Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000),
+      status: 'published',
+      category: 'concert',
+    });
+    await event.save();
+
+    const res = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'cancelled' });
+
+    expect(res).to.have.status(200);
+    expect(res.body.event || res.body).to.have.property('status', 'cancelled');
+
+    // DB verification
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('cancelled');
   });
 });

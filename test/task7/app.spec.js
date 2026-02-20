@@ -10,7 +10,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -22,7 +22,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -96,7 +96,7 @@ describe('Bug 7 — Ticket Barcode Security with HMAC Signing', function () {
     });
     await event.save();
 
-    section = new Section({
+    section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -292,6 +292,11 @@ describe('Bug 7 — Ticket Barcode Security with HMAC Signing', function () {
 
     expect(verifyRes.body.valid).to.equal(true);
     expect(verifyRes.body.ticket_id).to.equal(ticket1._id.toString());
+
+    // DB verification: scan_count and last_scanned_at
+    const dbTicket = await Ticket.findById(ticket1._id);
+    expect(dbTicket.scan_count).to.equal(1);
+    expect(dbTicket.last_scanned_at).to.not.be.null;
   });
 
   // --- Test 07: Detect duplicate scan and increment scan_count ---
@@ -323,6 +328,14 @@ describe('Bug 7 — Ticket Barcode Security with HMAC Signing', function () {
 
     expect(verifyRes2.body.scan_count).to.equal(2);
     expect(verifyRes2.body.warning).to.equal('duplicate_scan_detected');
+
+    // DB verification: scan_count and last_scanned_at
+    const dbTicket = await Ticket.findById(ticket1._id);
+    expect(dbTicket.scan_count).to.equal(2);
+    expect(dbTicket.last_scanned_at).to.not.be.null;
+    // Verify last_scanned_at is recent (within 5 seconds)
+    const timeDiff = Date.now() - new Date(dbTicket.last_scanned_at).getTime();
+    expect(timeDiff).to.be.below(5000);
   });
 
   // --- Test 08: Reject barcode for cancelled/refunded ticket ---

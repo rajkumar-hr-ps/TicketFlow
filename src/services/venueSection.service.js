@@ -1,10 +1,10 @@
-import { Section } from '../models/Section.js';
+import { VenueSection } from '../models/VenueSection.js';
 import { NotFoundError } from '../utils/AppError.js';
 import { roundMoney, getAvailableSeats } from '../utils/helpers.js';
 import { getPricingTier } from './pricing.service.js';
 
 export const getSectionsByEvent = async (eventId) => {
-  const sections = await Section.findActive({ event_id: eventId });
+  const sections = await VenueSection.findActive({ event_id: eventId });
   return sections.map((s) => ({
     ...s.toObject(),
     available: getAvailableSeats(s),
@@ -12,7 +12,7 @@ export const getSectionsByEvent = async (eventId) => {
 };
 
 export const getSectionAvailability = async (eventId, sectionId) => {
-  const section = await Section.findOneActive({ _id: sectionId, event_id: eventId });
+  const section = await VenueSection.findOneActive({ _id: sectionId, event_id: eventId });
   if (!section) {
     throw new NotFoundError('Section not found');
   }

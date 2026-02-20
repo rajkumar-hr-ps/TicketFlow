@@ -2,6 +2,8 @@ import { Ticket, TicketStatus } from '../../models/Ticket.js';
 import { Event } from '../../models/Event.js';
 import { User } from '../../models/User.js';
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export const transferTicket = async (req, res) => {
   const ticketId = req.params.id;
   const fromUserId = req.user._id;
@@ -9,6 +11,10 @@ export const transferTicket = async (req, res) => {
 
   if (!to_email) {
     return res.status(400).json({ error: 'to_email is required' });
+  }
+
+  if (typeof to_email !== 'string' || !EMAIL_RE.test(to_email)) {
+    return res.status(400).json({ error: 'invalid email format' });
   }
 
   const ticket = await Ticket.findOneActive({ _id: ticketId, user_id: fromUserId });

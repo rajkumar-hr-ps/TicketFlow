@@ -9,7 +9,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -21,7 +21,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -84,7 +84,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
   });
 
   beforeEach(async () => {
-    await cleanupModels([Payment, Ticket, Order, PromoCode, Section, Event]);
+    await cleanupModels([Payment, Ticket, Order, PromoCode, VenueSection, Event]);
   });
 
   after(async () => {
@@ -165,7 +165,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -213,6 +213,16 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
     res.body.refunds.forEach((refund) => {
       expect(refund.status).to.equal('success');
     });
+
+    // DB verification: refund payment records created
+    const refundPayments = await Payment.find({ type: 'refund' });
+    expect(refundPayments).to.have.lengthOf(3);
+
+    // DB verification: all orders have cancelled/refunded status
+    const orders = await Order.find({ event_id: event._id });
+    orders.forEach((o) => {
+      expect(['cancelled', 'refunded']).to.include(o.status);
+    });
   });
 
   // --- Test 05: Calculate refund as base price plus facility fee ---
@@ -227,7 +237,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'General',
@@ -271,6 +281,15 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
     expect(res.body.refunds).to.be.an('array').with.lengthOf(1);
     // 2 tickets * (100 base + 5 facility) = 210
     expect(res.body.refunds[0].refund_amount).to.equal(210);
+
+    // DB verification: refund payment record matches
+    const refundPayment = await Payment.findOne({ order_id: order._id, type: 'refund' });
+    expect(refundPayment).to.not.be.null;
+    expect(refundPayment.amount).to.equal(210);
+
+    // DB verification: order status updated
+    const updatedOrder = await Order.findById(order._id);
+    expect(updatedOrder.status).to.equal('refunded');
   });
 
   // --- Test 06: Set all confirmed tickets to cancelled status ---
@@ -285,7 +304,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Floor',
@@ -349,7 +368,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Balcony',
@@ -367,7 +386,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
 
     expect(res).to.have.status(200);
 
-    const updatedSection = await Section.findById(section._id);
+    const updatedSection = await VenueSection.findById(section._id);
     expect(updatedSection.sold_count).to.equal(0);
     expect(updatedSection.held_count).to.equal(0);
   });
@@ -384,7 +403,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Mezzanine',
@@ -457,7 +476,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Pit',
@@ -534,7 +553,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    await Section.create({
+    await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Empty Section',
@@ -567,7 +586,7 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       category: 'concert',
     });
 
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Main Hall',
@@ -657,5 +676,95 @@ describe('Bug 9 — Event Cancellation with Bulk Refund Cascade', function () {
       expect(refund.tickets_cancelled).to.equal(2);
       expect(refund.refund_amount).to.equal(210);
     });
+
+    // DB verification: refund payment records match refunds count
+    const refundPayments = await Payment.find({ type: 'refund' });
+    expect(refundPayments).to.have.lengthOf(res.body.refunds.length);
+
+    // DB verification: all orders have cancelled/refunded status
+    const allOrders = await Order.find({ event_id: event._id, status: { $in: ['confirmed', 'cancelled', 'refunded'] } });
+    allOrders.forEach((o) => {
+      expect(['cancelled', 'refunded']).to.include(o.status);
+    });
+  });
+
+  // --- Test 12: should handle partial failure in bulk refund ---
+  it('should handle partial failure in bulk refund', async () => {
+    const event = await Event.create({
+      title: 'Partial Failure Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000),
+      status: 'on_sale',
+      category: 'concert',
+    });
+
+    const section = await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'Partial Section',
+      capacity: 200,
+      base_price: 100,
+      sold_count: 6,
+      held_count: 0,
+    });
+
+    // Create 3 confirmed orders
+    const orders = [];
+    for (let i = 0; i < 3; i++) {
+      const order = await Order.create({
+        user_id: otherUser._id,
+        event_id: event._id,
+        quantity: 2,
+        status: 'confirmed',
+        payment_status: 'paid',
+        idempotency_key: `partial-fail-order-${i}-${Date.now()}`,
+      });
+      orders.push(order);
+
+      // Create tickets for first 2 orders only; order3 has no tickets
+      if (i < 2) {
+        for (let j = 0; j < 2; j++) {
+          await Ticket.create({
+            order_id: order._id,
+            event_id: event._id,
+            section_id: section._id,
+            user_id: otherUser._id,
+            original_user_id: otherUser._id,
+            status: 'confirmed',
+            unit_price: 100,
+            service_fee: 12,
+            facility_fee: 5,
+          });
+        }
+      }
+    }
+
+    const res = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'cancelled' });
+
+    expect(res).to.have.status(200);
+    expect(res.body.orders_processed).to.equal(3);
+    expect(res.body.refunds).to.be.an('array').with.lengthOf(3);
+
+    // Orders with tickets should have non-zero refund_amount
+    const ordersWithTickets = res.body.refunds.filter((r) => r.refund_amount > 0);
+    expect(ordersWithTickets).to.have.lengthOf(2);
+    ordersWithTickets.forEach((r) => {
+      expect(r.tickets_cancelled).to.equal(2);
+      expect(r.refund_amount).to.equal(210); // 2 * (100 + 5)
+    });
+
+    // Event should still be cancelled
+    const updatedEvent = await Event.findById(event._id);
+    expect(updatedEvent.status).to.equal('cancelled');
+
+    // DB verification: payment records created for orders with tickets
+    const refundPayments = await Payment.find({ type: 'refund' });
+    expect(refundPayments.length).to.be.at.least(2);
   });
 });

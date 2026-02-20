@@ -3,7 +3,7 @@ import { config } from './config/env.js';
 import { User } from './models/User.js';
 import { Venue } from './models/Venue.js';
 import { Event } from './models/Event.js';
-import { Section } from './models/Section.js';
+import { VenueSection } from './models/VenueSection.js';
 import { PromoCode } from './models/PromoCode.js';
 import { Order } from './models/Order.js';
 import { Ticket } from './models/Ticket.js';
@@ -20,7 +20,7 @@ const seed = async () => {
       User.deleteMany({}),
       Venue.deleteMany({}),
       Event.deleteMany({}),
-      Section.deleteMany({}),
+      VenueSection.deleteMany({}),
       PromoCode.deleteMany({}),
       Order.deleteMany({}),
       Ticket.deleteMany({}),
@@ -108,7 +108,7 @@ const seed = async () => {
     const jazzNight = events[3];
 
     // --- Sections ---
-    const sections = await Section.create([
+    const sections = await VenueSection.create([
       // Grand Arena — Rock Night Live
       { event_id: rockNight._id, venue_id: venues[0]._id, name: 'VIP Front Row', capacity: 200, base_price: 250 },
       { event_id: rockNight._id, venue_id: venues[0]._id, name: 'General Admission', capacity: 3000, base_price: 75 },
@@ -397,11 +397,11 @@ const seed = async () => {
     ]);
     console.log(`Seeded ${payments.length} payments`);
 
-    // --- Update Section Counters ---
+    // --- Update VenueSection Counters ---
     await Promise.all([
-      Section.findByIdAndUpdate(gaSection._id, { $inc: { sold_count: 2 } }),
-      Section.findByIdAndUpdate(vipSection._id, { $inc: { sold_count: 1 } }),
-      Section.findByIdAndUpdate(balconySection._id, { $inc: { held_count: 3 } }),
+      VenueSection.findByIdAndUpdate(gaSection._id, { $inc: { sold_count: 2 } }),
+      VenueSection.findByIdAndUpdate(vipSection._id, { $inc: { sold_count: 1 } }),
+      VenueSection.findByIdAndUpdate(balconySection._id, { $inc: { held_count: 3 } }),
     ]);
     console.log('Updated section counters');
 

@@ -10,7 +10,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -23,7 +23,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all([...models.map((M) => M.deleteMany({})), WebhookLog.deleteMany({})]);
 };
@@ -92,7 +92,7 @@ describe('Bug 8 — Payment Webhook Handler Security', function () {
     });
     await event.save();
 
-    section = new Section({
+    section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',

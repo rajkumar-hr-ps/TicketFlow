@@ -10,7 +10,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -22,7 +22,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -87,7 +87,7 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
   });
 
   beforeEach(async () => {
-    await cleanupModels([Payment, Ticket, Order, PromoCode, Section]);
+    await cleanupModels([Payment, Ticket, Order, PromoCode, VenueSection]);
     await Event.findByIdAndUpdate(event._id, { status: 'on_sale' });
   });
 
@@ -153,7 +153,7 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
   // --- Test 02: 400 when ticket is already confirmed ---
   it('should return 400 when ticket is already confirmed', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -189,7 +189,7 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
   // --- Test 03: should decrement section held_count after confirming ---
   it('should decrement section held_count after confirming', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -209,13 +209,13 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
     expect(res).to.have.status(200);
 
-    const updatedSection = await Section.findById(section._id);
+    const updatedSection = await VenueSection.findById(section._id);
     expect(updatedSection.held_count).to.equal(4);
   });
 
   // --- Test 04: should increment section sold_count after confirming ---
   it('should increment section sold_count after confirming', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -235,13 +235,13 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
     expect(res).to.have.status(200);
 
-    const updatedSection = await Section.findById(section._id);
+    const updatedSection = await VenueSection.findById(section._id);
     expect(updatedSection.sold_count).to.equal(51);
   });
 
   // --- Test 05: should remove Redis hold key after confirming ---
   it('should remove Redis hold key after confirming', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -273,7 +273,7 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
   // --- Test 06: should set event to sold_out when last available seat is confirmed ---
   it('should set event to sold_out when last available seat is confirmed', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -299,7 +299,7 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
   // --- Test 07: should NOT set event to sold_out when seats remain ---
   it('should NOT set event to sold_out when seats remain', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -325,7 +325,7 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
   // --- Test 08: should update ticket fields correctly after confirmation ---
   it('should update ticket fields correctly after confirmation', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',

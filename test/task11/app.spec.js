@@ -7,11 +7,11 @@ import { redisClient } from '../../src/config/redis.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 
 use(chaiHttp);
 
-const cleanupModels = async (models = [Section, Event, Venue, User]) => {
+const cleanupModels = async (models = [VenueSection, Event, Venue, User]) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
 
@@ -73,7 +73,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
   });
 
   beforeEach(async () => {
-    await Section.deleteMany({});
+    await VenueSection.deleteMany({});
   });
 
   after(async () => {
@@ -93,14 +93,14 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${event._id}/sections/${fakeId}/seat-map`);
+      .get(`/api/v1/events/${event._id}/venue-sections/${fakeId}/seat-map`);
 
     expect(res).to.have.status(404);
   });
 
   // --- Test 02: should return 404 when event does not exist ---
   it('should return 404 when event does not exist', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -113,14 +113,14 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     const fakeEventId = new mongoose.Types.ObjectId();
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${fakeEventId}/sections/${section._id}/seat-map`);
+      .get(`/api/v1/events/${fakeEventId}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(404);
   });
 
   // --- Test 03: should return correct available seat count ---
   it('should return correct available seat count', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -132,7 +132,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${event._id}/sections/${section._id}/seat-map`);
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
     expect(res.body.available).to.equal(30);
@@ -143,7 +143,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
   // --- Test 04: should return sold_out status when no seats available ---
   it('should return sold_out status when no seats available', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -155,7 +155,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${event._id}/sections/${section._id}/seat-map`);
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
     expect(res.body.status).to.equal('sold_out');
@@ -164,7 +164,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
   // --- Test 05: should return correct pricing tier and multiplier ---
   it('should return correct pricing tier and multiplier', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -176,7 +176,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${event._id}/sections/${section._id}/seat-map`);
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
     expect(res.body.pricing.tier).to.equal('very_high_demand');
@@ -186,7 +186,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
   // --- Test 06: should calculate fees correctly ---
   it('should calculate fees correctly', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -198,7 +198,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${event._id}/sections/${section._id}/seat-map`);
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
     // current_price = 100 * 1.5 = 150
@@ -208,7 +208,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
   // --- Test 07: should calculate sell_through_pct correctly ---
   it('should calculate sell_through_pct correctly', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Mezzanine',
@@ -220,7 +220,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${event._id}/sections/${section._id}/seat-map`);
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
     expect(res.body.sell_through_pct).to.equal(50);
@@ -228,7 +228,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
   // --- Test 08: should contain all required fields in response ---
   it('should contain all required fields in response', async () => {
-    const section = await Section.create({
+    const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Balcony',
@@ -240,7 +240,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
     const res = await request
       .execute(app)
-      .get(`/api/v1/events/${event._id}/sections/${section._id}/seat-map`);
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
     expect(res.body).to.have.property('event_id');
@@ -261,5 +261,71 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     expect(res.body.pricing).to.have.property('facility_fee');
     expect(res.body).to.have.property('status');
     expect(res.body.status).to.equal('available');
+  });
+
+  // --- Test 09: should return standard tier with base_price=80 at 30% sell-through ---
+  it('should return standard tier with base_price=80 at 30% sell-through', async () => {
+    const section = await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'Standard 80',
+      capacity: 100,
+      base_price: 80,
+      sold_count: 30,
+      held_count: 0,
+    });
+
+    const res = await request
+      .execute(app)
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
+
+    expect(res).to.have.status(200);
+    expect(res.body.pricing.tier).to.equal('standard');
+    expect(res.body.pricing.multiplier).to.equal(1.0);
+    expect(res.body.pricing.current_price).to.equal(80);
+  });
+
+  // --- Test 10: should return high_demand tier with base_price=80 at 60% sell-through ---
+  it('should return high_demand tier with base_price=80 at 60% sell-through', async () => {
+    const section = await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'High Demand 80',
+      capacity: 100,
+      base_price: 80,
+      sold_count: 60,
+      held_count: 0,
+    });
+
+    const res = await request
+      .execute(app)
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
+
+    expect(res).to.have.status(200);
+    expect(res.body.pricing.tier).to.equal('high_demand');
+    expect(res.body.pricing.multiplier).to.equal(1.25);
+    expect(res.body.pricing.current_price).to.equal(100); // 80 * 1.25
+  });
+
+  // --- Test 11: should return peak tier with base_price=80 at 95% sell-through ---
+  it('should return peak tier with base_price=80 at 95% sell-through', async () => {
+    const section = await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'Peak 80',
+      capacity: 100,
+      base_price: 80,
+      sold_count: 95,
+      held_count: 0,
+    });
+
+    const res = await request
+      .execute(app)
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
+
+    expect(res).to.have.status(200);
+    expect(res.body.pricing.tier).to.equal('peak');
+    expect(res.body.pricing.multiplier).to.equal(2.0);
+    expect(res.body.pricing.current_price).to.equal(160); // 80 * 2.0
   });
 });

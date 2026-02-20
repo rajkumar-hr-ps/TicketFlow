@@ -1,7 +1,7 @@
 import { Order, OrderStatus, OrderPaymentStatus } from '../../models/Order.js';
 import { Event, EventStatus } from '../../models/Event.js';
 import { Ticket, TicketStatus } from '../../models/Ticket.js';
-import { Section } from '../../models/Section.js';
+import { VenueSection } from '../../models/VenueSection.js';
 import { Payment, PaymentStatus, PaymentType } from '../../models/Payment.js';
 import { PromoCode } from '../../models/PromoCode.js';
 import { roundMoney, idempotencyKey } from '../../utils/helpers.js';
@@ -61,7 +61,7 @@ export const processRefund = async (req, res) => {
     sectionCounts[sid] = (sectionCounts[sid] || 0) + 1;
   }
   for (const [sectionId, count] of Object.entries(sectionCounts)) {
-    await Section.findByIdAndUpdate(sectionId, { $inc: { sold_count: -count } });
+    await VenueSection.findByIdAndUpdate(sectionId, { $inc: { sold_count: -count } });
   }
 
   // 5. Decrement promo code usage

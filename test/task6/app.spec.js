@@ -10,7 +10,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -22,7 +22,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -87,7 +87,7 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
   });
 
   beforeEach(async () => {
-    await cleanupModels([Payment, Ticket, Order, PromoCode, Section, Event]);
+    await cleanupModels([Payment, Ticket, Order, PromoCode, VenueSection, Event]);
   });
 
   after(async () => {
@@ -147,6 +147,10 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
 
     expect(res).to.have.status(409);
     expect(res.body.error).to.include('venue not available');
+
+    // DB verification: event was NOT created
+    const dbEvent = await Event.findOne({ title: 'Mid-Festival Concert' });
+    expect(dbEvent).to.be.null;
   });
 
   // --- Test 03: Conflict — partial overlap at start ---
@@ -178,6 +182,10 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
 
     expect(res).to.have.status(409);
     expect(res.body.error).to.include('venue not available');
+
+    // DB verification: event was NOT created
+    const dbEvent = await Event.findOne({ title: 'Overlapping Start Event' });
+    expect(dbEvent).to.be.null;
   });
 
   // --- Test 04: Conflict — partial overlap at end ---
@@ -209,6 +217,10 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
 
     expect(res).to.have.status(409);
     expect(res.body.error).to.include('venue not available');
+
+    // DB verification: event was NOT created
+    const dbEvent = await Event.findOne({ title: 'Overlapping End Event' });
+    expect(dbEvent).to.be.null;
   });
 
   // --- Test 05: Conflict — enclosed event (fully within existing) ---
@@ -240,6 +252,10 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
 
     expect(res).to.have.status(409);
     expect(res.body.error).to.include('venue not available');
+
+    // DB verification: event was NOT created
+    const dbEvent = await Event.findOne({ title: 'Enclosed Concert' });
+    expect(dbEvent).to.be.null;
   });
 
   // --- Test 06: Conflict — events too close (within 4-hour buffer) ---
@@ -274,6 +290,10 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
 
     expect(res).to.have.status(409);
     expect(res.body.error).to.include('venue not available');
+
+    // DB verification: event was NOT created
+    const dbEvent = await Event.findOne({ title: 'Evening Show' });
+    expect(dbEvent).to.be.null;
   });
 
   // --- Test 07: No conflict — cancelled events are ignored ---
@@ -306,6 +326,11 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     expect(res).to.have.status(201);
     expect(res.body).to.have.property('event');
     expect(res.body.event).to.have.property('title', 'Replacement Concert');
+
+    // DB verification: event was created with correct venue_id
+    const dbEvent = await Event.findOne({ title: 'Replacement Concert' });
+    expect(dbEvent).to.not.be.null;
+    expect(dbEvent.venue_id.toString()).to.equal(venue._id.toString());
   });
 
   // --- Test 08: No conflict — non-overlapping dates ---
@@ -338,6 +363,11 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     expect(res).to.have.status(201);
     expect(res.body).to.have.property('event');
     expect(res.body.event).to.have.property('title', 'Late June Show');
+
+    // DB verification: event was created with correct venue_id
+    const dbEvent = await Event.findOne({ title: 'Late June Show' });
+    expect(dbEvent).to.not.be.null;
+    expect(dbEvent.venue_id.toString()).to.equal(venue._id.toString());
   });
 
   // --- Test 09: No conflict — different venues on same dates ---
@@ -370,5 +400,10 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     expect(res).to.have.status(201);
     expect(res.body).to.have.property('event');
     expect(res.body.event).to.have.property('title', 'Hall Conference');
+
+    // DB verification: event was created at venue2
+    const dbEvent = await Event.findOne({ title: 'Hall Conference' });
+    expect(dbEvent).to.not.be.null;
+    expect(dbEvent.venue_id.toString()).to.equal(venue2._id.toString());
   });
 });

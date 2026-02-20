@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-import { Event, EventStatus, VALID_TRANSITIONS } from '../models/Event.js';
-import { Section } from '../models/Section.js';
+import { Event, EventStatus, EVENT_STATUSES, EVENT_CATEGORIES, VALID_TRANSITIONS } from '../models/Event.js';
+import { VenueSection } from '../models/VenueSection.js';
 import { Venue } from '../models/Venue.js';
 import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
@@ -10,6 +10,8 @@ import { BadRequestError, NotFoundError, ConflictError } from '../utils/AppError
 import * as cacheService from './cache.service.js';
 import { removeHold } from './hold.service.js';
 import { roundMoney, getAvailableSeats, idempotencyKey } from '../utils/helpers.js';
+
+const isValidDate = (v) => !isNaN(new Date(v).getTime());
 
 const BUFFER_HOURS = 4;
 
@@ -63,6 +65,42 @@ export const createEvent = async (userId, data) => {
     throw new BadRequestError('title, venue_id, start_date, end_date, and category are required');
   }
 
+  if (typeof title !== 'string' || title.trim().length < 1 || title.trim().length > 300) {
+    throw new BadRequestError('title must be a string between 1 and 300 characters');
+  }
+
+  if (description !== undefined && description !== null && description !== '') {
+    if (typeof description !== 'string' || description.length > 2000) {
+      throw new BadRequestError('description must be a string of at most 2000 characters');
+    }
+  }
+
+  if (!isValidDate(start_date) || !isValidDate(end_date)) {
+    throw new BadRequestError('start_date and end_date must be valid dates');
+  }
+
+  if (new Date(end_date) <= new Date(start_date)) {
+    throw new BadRequestError('end_date must be after start_date');
+  }
+
+  if (!EVENT_CATEGORIES.includes(category)) {
+    throw new BadRequestError(`category must be one of: ${EVENT_CATEGORIES.join(', ')}`);
+  }
+
+  if (sections && Array.isArray(sections)) {
+    for (const s of sections) {
+      if (!s.name || typeof s.name !== 'string' || s.name.trim().length < 1) {
+        throw new BadRequestError('each section must have a non-empty name');
+      }
+      if (typeof s.capacity !== 'number' || !Number.isInteger(s.capacity) || s.capacity < 1) {
+        throw new BadRequestError('each section capacity must be a positive integer');
+      }
+      if (typeof s.base_price !== 'number' || s.base_price < 0) {
+        throw new BadRequestError('each section base_price must be a non-negative number');
+      }
+    }
+  }
+
   const venue = await Venue.findOneActive({ _id: venue_id });
   if (!venue) {
     throw new NotFoundError('Venue not found');
@@ -95,7 +133,7 @@ export const createEvent = async (userId, data) => {
       capacity: s.capacity,
       base_price: s.base_price,
     }));
-    await Section.insertMany(sectionDocs);
+    await VenueSection.insertMany(sectionDocs);
   }
 
   await cacheService.invalidateCache('events:*');
@@ -152,7 +190,7 @@ export const getEventById = async (eventId) => {
     throw new NotFoundError('Event not found');
   }
 
-  const sections = await Section.findActive({ event_id: eventId });
+  const sections = await VenueSection.findActive({ event_id: eventId });
   const sectionsWithAvailability = sections.map((s) => ({
     ...s.toObject(),
     available: getAvailableSeats(s),
@@ -163,6 +201,14 @@ export const getEventById = async (eventId) => {
 
 // --- Bug 2 Solution: Event status state machine ---
 export const updateEventStatus = async (eventId, newStatus, userId) => {
+  if (!newStatus || typeof newStatus !== 'string') {
+    throw new BadRequestError('status is required and must be a string');
+  }
+
+  if (!EVENT_STATUSES.includes(newStatus)) {
+    throw new BadRequestError(`invalid status. Must be one of: ${EVENT_STATUSES.join(', ')}`);
+  }
+
   const event = await Event.findOneActive({ _id: eventId, organizer_id: userId });
   if (!event) {
     throw new NotFoundError('event not found or unauthorized');
@@ -176,14 +222,14 @@ export const updateEventStatus = async (eventId, newStatus, userId) => {
   }
 
   if (newStatus === EventStatus.PUBLISHED) {
-    const sectionCount = await Section.countActive({ event_id: eventId });
+    const sectionCount = await VenueSection.countActive({ event_id: eventId });
     if (sectionCount === 0) {
       throw new BadRequestError('cannot publish event without sections');
     }
   }
 
   if (newStatus === EventStatus.ON_SALE && event.status === EventStatus.SOLD_OUT) {
-    const sections = await Section.findActive({ event_id: eventId });
+    const sections = await VenueSection.findActive({ event_id: eventId });
     const hasAvailable = sections.some((s) => getAvailableSeats(s) > 0);
     if (!hasAvailable) {
       throw new BadRequestError('cannot set on_sale when no seats are available');
@@ -304,7 +350,7 @@ const cancelEvent = async (eventId, organizerId) => {
   );
 
   // 4. Reset section counters
-  await Section.updateMany(
+  await VenueSection.updateMany(
     { event_id: eventId },
     { $set: { sold_count: 0, held_count: 0 } }
   );

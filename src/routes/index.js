@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { router as authRoutes } from './auth.routes.js';
 import { router as venueRoutes } from './venue.routes.js';
 import { router as eventRoutes } from './event.routes.js';
-import { router as sectionRoutes } from './section.routes.js';
+import { router as venueSectionRoutes } from './venueSection.routes.js';
 import { router as orderRoutes } from './order.routes.js';
 import { router as promoCodeRoutes } from './promoCode.routes.js';
 import { router as paymentRoutes } from './payment.routes.js';
@@ -26,7 +26,7 @@ router.use('/venues', venueRoutes);
 // Event routes — schedule BEFORE :id to avoid param capture
 router.use('/events', scheduleRoutes);
 router.use('/events', eventRoutes);
-router.use('/events', sectionRoutes);
+router.use('/events', venueSectionRoutes);
 
 // Feature routes on events
 router.use('/events', seatMapRoutes);

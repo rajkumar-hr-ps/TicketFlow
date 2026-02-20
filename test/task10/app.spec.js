@@ -9,7 +9,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -21,7 +21,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -86,7 +86,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
   });
 
   beforeEach(async () => {
-    await cleanupModels([Payment, Ticket, Order, PromoCode, Section]);
+    await cleanupModels([Payment, Ticket, Order, PromoCode, VenueSection]);
   });
 
   after(async () => {
@@ -104,7 +104,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
   it('should return 404 when event does not exist', async () => {
     const fakeEventId = new mongoose.Types.ObjectId();
 
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: fakeEventId,
       venue_id: venue._id,
       name: 'VIP',
@@ -127,6 +127,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       });
 
     expect(res).to.have.status(404);
+    expect(res.body.error).to.match(/not found|not available/i);
   });
 
   // --- Test 02: should return 404 when event is not on sale ---
@@ -142,7 +143,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await draftEvent.save();
 
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: draftEvent._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -165,11 +166,12 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       });
 
     expect(res).to.have.status(404);
+    expect(res.body.error).to.match(/not found|not available/i);
   });
 
   // --- Test 03: should create multi-section order successfully ---
   it('should create multi-section order successfully', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -180,7 +182,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -208,11 +210,17 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     expect(res.body.order.quantity).to.equal(5);
     expect(res.body.order.tickets).to.be.an('array').with.lengthOf(5);
     expect(res.body.total_amount).to.be.a('number');
+
+    // DB verification: order persisted correctly
+    const dbOrder = await Order.findById(res.body.order._id);
+    expect(dbOrder).to.not.be.null;
+    expect(dbOrder.quantity).to.equal(5);
+    expect(dbOrder.status).to.be.oneOf(['pending', 'confirmed']);
   });
 
   // --- Test 04: should rollback first section when second section fails ---
   it('should rollback first section when second section fails', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -223,7 +231,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -247,15 +255,20 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       });
 
     expect(res).to.have.status(400);
+    expect(res.body.error).to.match(/insufficient capacity|capacity/i);
 
     // Verify VIP section held_count is still 0 (rolled back)
-    const updatedVip = await Section.findById(vipSection._id);
+    const updatedVip = await VenueSection.findById(vipSection._id);
     expect(updatedVip.held_count).to.equal(0);
+
+    // DB verification: no order was created
+    const orderCount = await Order.countDocuments({ event_id: event._id });
+    expect(orderCount).to.equal(0);
   });
 
   // --- Test 05: should not create orphaned tickets on failure ---
   it('should not create orphaned tickets on failure', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -266,7 +279,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -294,11 +307,15 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     // Verify no orphaned tickets exist
     const ticketCount = await Ticket.countDocuments({ event_id: event._id });
     expect(ticketCount).to.equal(0);
+
+    // DB verification: no order was created
+    const orderCount = await Order.countDocuments({ event_id: event._id });
+    expect(orderCount).to.equal(0);
   });
 
   // --- Test 06: should not leave orphaned Redis holds on failure ---
   it('should not leave orphaned Redis holds on failure', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -309,7 +326,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -345,7 +362,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
 
   // --- Test 07: should correctly increment held_count for each section on success ---
   it('should correctly increment held_count for each section on success', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -356,7 +373,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -382,17 +399,17 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     expect(res).to.have.status(201);
 
     // Verify VIP held_count incremented to 3
-    const updatedVip = await Section.findById(vipSection._id);
+    const updatedVip = await VenueSection.findById(vipSection._id);
     expect(updatedVip.held_count).to.equal(3);
 
     // Verify Orchestra held_count incremented to 2
-    const updatedOrchestra = await Section.findById(orchestraSection._id);
+    const updatedOrchestra = await VenueSection.findById(orchestraSection._id);
     expect(updatedOrchestra.held_count).to.equal(2);
   });
 
   // --- Test 08: should not change held_count on failure ---
   it('should not change held_count on failure', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -403,7 +420,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -429,16 +446,16 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     expect(res).to.have.status(400);
 
     // Verify both sections still have held_count=0
-    const updatedVip = await Section.findById(vipSection._id);
+    const updatedVip = await VenueSection.findById(vipSection._id);
     expect(updatedVip.held_count).to.equal(0);
 
-    const updatedOrchestra = await Section.findById(orchestraSection._id);
+    const updatedOrchestra = await VenueSection.findById(orchestraSection._id);
     expect(updatedOrchestra.held_count).to.equal(0);
   });
 
   // --- Test 09: should create correct number of tickets on success ---
   it('should create correct number of tickets on success', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -449,7 +466,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -481,7 +498,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
 
   // --- Test 10: should include all tickets in the order response ---
   it('should include all tickets in the order response', async () => {
-    const vipSection = new Section({
+    const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -492,7 +509,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     });
     await vipSection.save();
 
-    const orchestraSection = new Section({
+    const orchestraSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -521,5 +538,50 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     // Total quantity = 2 + 3 = 5, tickets array should match
     expect(res.body.order.tickets).to.have.lengthOf(res.body.order.quantity);
     expect(res.body.order.tickets).to.have.lengthOf(5);
+  });
+
+  // --- Test 11: should handle concurrent orders without overselling (TOCTOU) ---
+  it('should handle concurrent orders without overselling (TOCTOU)', async () => {
+    const tightSection = await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'Tight',
+      capacity: 5,
+      base_price: 100,
+      sold_count: 0,
+      held_count: 0,
+    });
+
+    // Two concurrent requests each trying to order 4 tickets (4+4=8 > capacity 5)
+    const [res1, res2] = await Promise.all([
+      request
+        .execute(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          event_id: event._id.toString(),
+          sections: [{ section_id: tightSection._id.toString(), quantity: 4 }],
+        }),
+      request
+        .execute(app)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          event_id: event._id.toString(),
+          sections: [{ section_id: tightSection._id.toString(), quantity: 4 }],
+        }),
+    ]);
+
+    const statuses = [res1.status, res2.status].sort();
+    // Exactly one should succeed (201), one should fail (400)
+    expect(statuses).to.deep.equal([201, 400]);
+
+    // Verify section was not oversold
+    const updatedSection = await VenueSection.findById(tightSection._id);
+    expect(updatedSection.held_count).to.be.at.most(4);
+
+    // Verify ticket count matches held_count
+    const ticketCount = await Ticket.countDocuments({ section_id: tightSection._id });
+    expect(ticketCount).to.equal(updatedSection.held_count);
   });
 });

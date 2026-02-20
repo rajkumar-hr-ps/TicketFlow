@@ -1,11 +1,38 @@
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User.js';
+import { User, USER_ROLES } from '../models/User.js';
 import { config } from '../config/env.js';
 import { BadRequestError, UnauthorizedError, NotFoundError } from '../utils/AppError.js';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const register = async ({ name, email, password, role }) => {
   if (!name || !email || !password) {
     throw new BadRequestError('Name, email, and password are required');
+  }
+
+  if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
+    throw new BadRequestError('Name, email, and password must be strings');
+  }
+
+  const trimmedName = name.trim();
+  if (trimmedName.length < 2 || trimmedName.length > 100) {
+    throw new BadRequestError('Name must be between 2 and 100 characters');
+  }
+
+  if (!EMAIL_RE.test(email)) {
+    throw new BadRequestError('Invalid email format');
+  }
+
+  if (password.length < 8) {
+    throw new BadRequestError('Password must be at least 8 characters');
+  }
+
+  if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+    throw new BadRequestError('Password must contain at least one uppercase letter, one lowercase letter, and one digit');
+  }
+
+  if (role !== undefined && !USER_ROLES.includes(role)) {
+    throw new BadRequestError(`Invalid role. Must be one of: ${USER_ROLES.join(', ')}`);
   }
 
   const existingUser = await User.findOneActive({ email: email.toLowerCase() });
@@ -14,7 +41,7 @@ export const register = async ({ name, email, password, role }) => {
   }
 
   const user = new User({
-    name,
+    name: trimmedName,
     email: email.toLowerCase(),
     password,
     role: role || 'customer',

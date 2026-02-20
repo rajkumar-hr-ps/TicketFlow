@@ -10,7 +10,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -22,7 +22,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -87,7 +87,7 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
   });
 
   beforeEach(async () => {
-    await cleanupModels([Payment, Ticket, Order, PromoCode, Section]);
+    await cleanupModels([Payment, Ticket, Order, PromoCode, VenueSection]);
   });
 
   after(async () => {
@@ -120,7 +120,7 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
 
   // --- Test 02: Validation — invalid quantity ---
   it('should return 400 when quantity is zero or missing', async () => {
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -147,7 +147,7 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
   // --- Test 03: Pricing — base rate with no demand (standard tier 1.0x) ---
   it('should calculate correct total at standard pricing tier with all fees', async () => {
     // 10% sell-through → 1.0x multiplier (standard)
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -181,12 +181,20 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
     expect(res.body.facility_fee_total).to.equal(10);
     expect(res.body.processing_fee).to.equal(3);
     expect(res.body.total_amount).to.equal(237);
+
+    // DB verification
+    const order = await Order.findOne({ user_id: user._id });
+    expect(order).to.not.be.null;
+    expect(order.total_amount).to.equal(237);
+    expect(order.subtotal).to.equal(200);
+    expect(order.service_fee_total).to.equal(24);
+    expect(order.facility_fee_total).to.equal(10);
   });
 
   // --- Test 04: Pricing — high demand multiplier (1.5x at 80% sell-through) ---
   it('should apply 1.5x multiplier at very high demand tier', async () => {
     // 80% sell-through → 1.5x multiplier (very_high_demand)
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
@@ -217,12 +225,21 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
     expect(res.body.service_fee_total).to.equal(18);
     expect(res.body.facility_fee_total).to.equal(7.5);
     expect(res.body.total_amount).to.equal(178.5);
+
+    // DB verification
+    const order = await Order.findOne({ user_id: user._id });
+    expect(order).to.not.be.null;
+    expect(order.total_amount).to.equal(178.5);
+    expect(order.subtotal).to.equal(150);
+    const tickets = await Ticket.find({ order_id: order._id });
+    expect(tickets).to.have.lengthOf(1);
+    expect(tickets[0].unit_price).to.equal(150);
   });
 
   // --- Test 05: Pricing — peak demand multiplier (2.0x at 95% sell-through) ---
   it('should apply 2.0x multiplier at peak demand tier', async () => {
     // 95% sell-through → 2.0x multiplier (peak)
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Front Row',
@@ -253,11 +270,20 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
     expect(res.body.service_fee_total).to.equal(24);
     expect(res.body.facility_fee_total).to.equal(10);
     expect(res.body.total_amount).to.equal(237);
+
+    // DB verification
+    const order = await Order.findOne({ user_id: user._id });
+    expect(order).to.not.be.null;
+    expect(order.total_amount).to.equal(237);
+    expect(order.subtotal).to.equal(200);
+    const tickets = await Ticket.find({ order_id: order._id });
+    expect(tickets).to.have.lengthOf(1);
+    expect(tickets[0].unit_price).to.equal(200);
   });
 
   // --- Test 06: Pricing — percentage promo discount applied to subtotal ---
   it('should apply percentage promo code discount to subtotal before fees', async () => {
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Balcony',
@@ -299,11 +325,18 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
     // total = $200 + $24 + $10 + $3 - $40 = $197
     expect(res.body.discount_amount).to.equal(40);
     expect(res.body.total_amount).to.equal(197);
+
+    // DB verification
+    const order = await Order.findOne({ user_id: user._id });
+    expect(order).to.not.be.null;
+    expect(order.discount_amount).to.equal(40);
+    const updatedPromo = await PromoCode.findById(promo._id);
+    expect(updatedPromo.current_uses).to.equal(1);
   });
 
   // --- Test 07: Pricing — fixed promo discount capped at subtotal ---
   it('should cap fixed promo discount at subtotal amount', async () => {
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Upper Deck',
@@ -345,11 +378,18 @@ describe('Bug 1 — Order Total Pricing Pipeline', function () {
     // total = $200 + $24 + $10 + $3 - $200 = $37
     expect(res.body.discount_amount).to.equal(200);
     expect(res.body.total_amount).to.equal(37);
+
+    // DB verification
+    const order = await Order.findOne({ user_id: user._id });
+    expect(order).to.not.be.null;
+    expect(order.discount_amount).to.equal(200);
+    const updatedPromo = await PromoCode.findById(promo._id);
+    expect(updatedPromo.current_uses).to.equal(1);
   });
 
   // --- Test 08: Response — all fee components present in response ---
   it('should return all fee component fields in the order response', async () => {
-    const section = new Section({
+    const section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'General',

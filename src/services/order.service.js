@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
-import { Section } from '../models/Section.js';
+import { VenueSection } from '../models/VenueSection.js';
 import { Event, EventStatus } from '../models/Event.js';
 import { Payment, PaymentStatus, PaymentType } from '../models/Payment.js';
 import { PromoCode } from '../models/PromoCode.js';
@@ -30,12 +30,24 @@ export const createOrder = async (userId, data) => {
 
   // Multi-section order (Bug 10)
   if (sectionRequests && Array.isArray(sectionRequests) && sectionRequests.length > 0) {
+    for (const sr of sectionRequests) {
+      if (!sr.section_id) {
+        throw new BadRequestError('each section entry must have a section_id');
+      }
+      if (typeof sr.quantity !== 'number' || !Number.isInteger(sr.quantity) || sr.quantity < 1) {
+        throw new BadRequestError('each section entry quantity must be a positive integer');
+      }
+    }
     return createMultiSectionOrder(userId, event_id, sectionRequests, promo_code, idempotency_key);
   }
 
   // Single-section order
-  if (!section_id || !quantity || quantity < 1) {
+  if (!section_id || !quantity) {
     throw new BadRequestError('section_id and quantity are required');
+  }
+
+  if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 1) {
+    throw new BadRequestError('quantity must be a positive integer');
   }
 
   const event = await Event.findOneActive({ _id: event_id, status: EventStatus.ON_SALE });
@@ -56,7 +68,7 @@ export const createOrder = async (userId, data) => {
   const pricing = await pricingService.calculateOrderTotal(section_id, quantity, promoCode);
 
   // Check section availability
-  const section = await Section.findOneActive({ _id: section_id });
+  const section = await VenueSection.findOneActive({ _id: section_id });
   if (!section) throw new NotFoundError('section not found');
 
   const available = getAvailableSeats(section);
@@ -65,7 +77,7 @@ export const createOrder = async (userId, data) => {
   }
 
   // Increment held_count
-  await Section.findByIdAndUpdate(section_id, { $inc: { held_count: quantity } });
+  await VenueSection.findByIdAndUpdate(section_id, { $inc: { held_count: quantity } });
 
   // Pre-generate order ID so tickets can reference it
   const orderId = new mongoose.Types.ObjectId();
@@ -176,7 +188,7 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
 
     for (const req of sectionRequests) {
       // Atomic check-and-reserve within transaction
-      const section = await Section.findOneAndUpdate(
+      const section = await VenueSection.findOneAndUpdate(
         {
           _id: req.section_id,
           deleted_at: null,
@@ -378,7 +390,7 @@ export const processRefund = async (orderId, userId) => {
     sectionCounts[sid] = (sectionCounts[sid] || 0) + 1;
   }
   for (const [sectionId, count] of Object.entries(sectionCounts)) {
-    await Section.findByIdAndUpdate(sectionId, { $inc: { sold_count: -count } });
+    await VenueSection.findByIdAndUpdate(sectionId, { $inc: { sold_count: -count } });
   }
 
   // 5. Decrement promo code usage

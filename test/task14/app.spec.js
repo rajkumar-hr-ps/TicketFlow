@@ -9,7 +9,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -19,7 +19,7 @@ use(chaiHttp);
 const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
-const cleanupModels = async (models = [Payment, Ticket, Order, Section, Event, Venue, User]) => {
+const cleanupModels = async (models = [Payment, Ticket, Order, VenueSection, Event, Venue, User]) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
 
@@ -69,7 +69,7 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       category: 'concert',
     });
 
-    section = await Section.create({
+    section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -216,7 +216,7 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       category: 'concert',
     });
 
-    const pastSection = await Section.create({
+    const pastSection = await VenueSection.create({
       event_id: pastEvent._id,
       venue_id: venue._id,
       name: 'Past Section',

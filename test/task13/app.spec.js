@@ -9,7 +9,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { WaitlistEntry } from '../../src/models/WaitlistEntry.js';
 
 use(chaiHttp);
@@ -17,7 +17,7 @@ use(chaiHttp);
 const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
-const cleanupModels = async (models = [WaitlistEntry, Section, Event, Venue, User]) => {
+const cleanupModels = async (models = [WaitlistEntry, VenueSection, Event, Venue, User]) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
 
@@ -147,6 +147,19 @@ describe('Feature 3 — Waitlist Management with Automatic Position Assignment',
     expect(res).to.have.status(201);
     expect(res.body.position).to.equal(1);
     expect(res.body.ahead).to.equal(0);
+
+    // Response structure assertions
+    expect(res.body).to.have.property('waitlist_id');
+    expect(res.body).to.have.property('event_id');
+    expect(res.body).to.have.property('status', 'waiting');
+    expect(res.body).to.have.property('joined_at');
+    expect(res.body.event_id.toString()).to.equal(soldOutEvent._id.toString());
+
+    // DB verification
+    const entry = await WaitlistEntry.findOne({ event_id: soldOutEvent._id, user_id: user1._id });
+    expect(entry).to.not.be.null;
+    expect(entry.position).to.equal(1);
+    expect(entry.status).to.equal('waiting');
   });
 
   // --- Test 05: should assign sequential positions to multiple users ---
@@ -169,6 +182,13 @@ describe('Feature 3 — Waitlist Management with Automatic Position Assignment',
     expect(res1.body.position).to.equal(1);
     expect(res2.body.position).to.equal(2);
     expect(res3.body.position).to.equal(3);
+
+    // DB verification: all 3 entries with correct positions
+    const entries = await WaitlistEntry.find({ event_id: soldOutEvent._id }).sort({ position: 1 });
+    expect(entries).to.have.lengthOf(3);
+    expect(entries[0].position).to.equal(1);
+    expect(entries[1].position).to.equal(2);
+    expect(entries[2].position).to.equal(3);
   });
 
   // --- Test 06: should return correct ahead count ---
@@ -190,6 +210,11 @@ describe('Feature 3 — Waitlist Management with Automatic Position Assignment',
 
     expect(res.body.position).to.equal(3);
     expect(res.body.ahead).to.equal(2);
+
+    // DB verification: user3 entry has position 3
+    const entry = await WaitlistEntry.findOne({ event_id: soldOutEvent._id, user_id: user3._id });
+    expect(entry).to.not.be.null;
+    expect(entry.position).to.equal(3);
   });
 
   // --- Test 07: should return correct total_waiting count on GET ---

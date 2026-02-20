@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
-import { Section } from '../models/Section.js';
+import { VenueSection } from '../models/VenueSection.js';
 import { Event, EventStatus } from '../models/Event.js';
 import { config } from '../config/env.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
@@ -17,7 +17,7 @@ export const confirmTicketPurchase = async (ticketId) => {
   }
 
   // 1. Transition section counters: held → sold
-  const section = await Section.findByIdAndUpdate(
+  const section = await VenueSection.findByIdAndUpdate(
     ticket.section_id,
     { $inc: { held_count: -1, sold_count: 1 } },
     { new: true }
@@ -33,7 +33,7 @@ export const confirmTicketPurchase = async (ticketId) => {
 
   // 4. Check if section is now sold out
   if (section && getAvailableSeats(section) <= 0) {
-    const eventSections = await Section.findActive({ event_id: ticket.event_id });
+    const eventSections = await VenueSection.findActive({ event_id: ticket.event_id });
     const allSoldOut = eventSections.every(
       (s) => getAvailableSeats(s) <= 0
     );
@@ -70,7 +70,7 @@ export const confirmOrderTickets = async (orderId) => {
 
   const updatedSections = [];
   for (const [sectionId, count] of Object.entries(sectionCounts)) {
-    const section = await Section.findByIdAndUpdate(
+    const section = await VenueSection.findByIdAndUpdate(
       sectionId,
       { $inc: { held_count: -count, sold_count: count } },
       { new: true }
@@ -80,7 +80,7 @@ export const confirmOrderTickets = async (orderId) => {
 
   // 3. Check if all sections for the event are sold out
   const eventId = tickets[0].event_id;
-  const eventSections = await Section.findActive({ event_id: eventId });
+  const eventSections = await VenueSection.findActive({ event_id: eventId });
   const allSoldOut = eventSections.every((s) => getAvailableSeats(s) <= 0);
   if (allSoldOut) {
     await Event.findByIdAndUpdate(eventId, { status: EventStatus.SOLD_OUT });

@@ -9,7 +9,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -21,7 +21,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -75,7 +75,7 @@ describe('Bug 4 — Refund with Tiered Penalties and Fee Decomposition', functio
   });
 
   beforeEach(async () => {
-    await cleanupModels([Payment, Ticket, Order, PromoCode, Section, Event]);
+    await cleanupModels([Payment, Ticket, Order, PromoCode, VenueSection, Event]);
   });
 
   after(async () => {
@@ -106,7 +106,7 @@ describe('Bug 4 — Refund with Tiered Penalties and Fee Decomposition', functio
 
   // --- Helper: create a section ---
   const createSection = async (eventId, soldCount = 0) => {
-    const section = new Section({
+    const section = new VenueSection({
       event_id: eventId,
       venue_id: venue._id,
       name: 'General Admission',
@@ -239,7 +239,7 @@ describe('Bug 4 — Refund with Tiered Penalties and Fee Decomposition', functio
     expect(res.body.facility_fee_refund).to.equal(0);
 
     // Verify section sold_count decreased
-    const updatedSection = await Section.findById(section._id);
+    const updatedSection = await VenueSection.findById(section._id);
     expect(updatedSection.sold_count).to.equal(0);
   });
 
@@ -341,7 +341,7 @@ describe('Bug 4 — Refund with Tiered Penalties and Fee Decomposition', functio
     expect(res.body.tickets_refunded).to.equal(3);
 
     // Verify sold_count goes to 0
-    const updatedSection = await Section.findById(section._id);
+    const updatedSection = await VenueSection.findById(section._id);
     expect(updatedSection.sold_count).to.equal(0);
   });
 

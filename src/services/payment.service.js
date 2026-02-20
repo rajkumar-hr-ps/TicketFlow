@@ -42,6 +42,19 @@ const verifyWebhookSignature = (signature, body) => {
 export const processWebhook = async (body) => {
   const { payment_id, status, amount, webhook_event_id } = body;
 
+  if (!payment_id || !status || amount === undefined || amount === null || !webhook_event_id) {
+    throw new BadRequestError('payment_id, status, amount, and webhook_event_id are required');
+  }
+
+  if (typeof amount !== 'number' || amount < 0) {
+    throw new BadRequestError('amount must be a non-negative number');
+  }
+
+  const validStatuses = Object.values(PaymentStatus);
+  if (!validStatuses.includes(status)) {
+    throw new BadRequestError(`status must be one of: ${validStatuses.join(', ')}`);
+  }
+
   // Idempotency check
   const existingWebhook = await WebhookLog.findOne({ webhook_event_id });
   if (existingWebhook) {

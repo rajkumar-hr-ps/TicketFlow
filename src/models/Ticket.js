@@ -26,7 +26,7 @@ const ticketSchema = new mongoose.Schema(
     },
     section_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Section',
+      ref: 'VenueSection',
       required: true,
     },
     user_id: {

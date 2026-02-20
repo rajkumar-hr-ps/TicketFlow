@@ -7,11 +7,11 @@ import { redisClient } from '../../src/config/redis.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 
 use(chaiHttp);
 
-const cleanupModels = async (models = [Section, Event, Venue, User]) => {
+const cleanupModels = async (models = [VenueSection, Event, Venue, User]) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
 
@@ -70,7 +70,7 @@ describe('Feature 2 — Event Schedule with Date Filter and Venue Grouping', fun
   });
 
   beforeEach(async () => {
-    await Section.deleteMany({});
+    await VenueSection.deleteMany({});
     await Event.deleteMany({});
   });
 
@@ -205,7 +205,7 @@ describe('Feature 2 — Event Schedule with Date Filter and Venue Grouping', fun
       category: 'concert',
     });
 
-    await Section.create([
+    await VenueSection.create([
       { event_id: evt._id, venue_id: venue1._id, name: 'Cheap', capacity: 100, base_price: 50, sold_count: 0, held_count: 0 },
       { event_id: evt._id, venue_id: venue1._id, name: 'Mid', capacity: 100, base_price: 100, sold_count: 0, held_count: 0 },
       { event_id: evt._id, venue_id: venue1._id, name: 'VIP', capacity: 50, base_price: 200, sold_count: 0, held_count: 0 },
@@ -233,7 +233,7 @@ describe('Feature 2 — Event Schedule with Date Filter and Venue Grouping', fun
       category: 'concert',
     });
 
-    await Section.create([
+    await VenueSection.create([
       { event_id: evt._id, venue_id: venue1._id, name: 'A', capacity: 100, base_price: 50, sold_count: 30, held_count: 10 },
       { event_id: evt._id, venue_id: venue1._id, name: 'B', capacity: 200, base_price: 75, sold_count: 50, held_count: 0 },
     ]);

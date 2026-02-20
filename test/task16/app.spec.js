@@ -9,7 +9,7 @@ import { config } from '../../src/config/env.js';
 import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
-import { Section } from '../../src/models/Section.js';
+import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
@@ -21,7 +21,7 @@ const generateToken = (userId) =>
   jwt.sign({ userId }, config.jwtSecret, { expiresIn: '24h' });
 
 const cleanupModels = async (
-  models = [Payment, Ticket, Order, PromoCode, Section, Event, Venue, User]
+  models = [Payment, Ticket, Order, PromoCode, VenueSection, Event, Venue, User]
 ) => {
   await Promise.all(models.map((Model) => Model.deleteMany({})));
 };
@@ -76,7 +76,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
     await Ticket.deleteMany({});
     await Order.deleteMany({});
     await PromoCode.deleteMany({});
-    await Section.deleteMany({});
+    await VenueSection.deleteMany({});
     await Event.deleteMany({});
 
     // Create event 10 days from now (full refund tier)
@@ -90,7 +90,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       category: 'concert',
     });
 
-    section = await Section.create({
+    section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
@@ -214,7 +214,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       category: 'concert',
     });
 
-    const soonSection = await Section.create({
+    const soonSection = await VenueSection.create({
       event_id: soonEvent._id,
       venue_id: venue._id,
       name: 'Soon Section',
@@ -264,7 +264,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       category: 'concert',
     });
 
-    const medSection = await Section.create({
+    const medSection = await VenueSection.create({
       event_id: medEvent._id,
       venue_id: venue._id,
       name: 'Med Section',
@@ -300,7 +300,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       category: 'concert',
     });
 
-    const closeSection = await Section.create({
+    const closeSection = await VenueSection.create({
       event_id: closeEvent._id,
       venue_id: venue._id,
       name: 'Close Section',
@@ -336,7 +336,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       category: 'concert',
     });
 
-    const cancelSection = await Section.create({
+    const cancelSection = await VenueSection.create({
       event_id: cancelledEvent._id,
       venue_id: venue._id,
       name: 'Cancel Section',
@@ -363,7 +363,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
   // --- Test 09: should restore section sold_count after refund ---
   it('should restore section sold_count after refund', async () => {
     const { order } = await createConfirmedOrder(3);
-    const beforeSection = await Section.findById(section._id);
+    const beforeSection = await VenueSection.findById(section._id);
     const soldBefore = beforeSection.sold_count;
 
     const res = await request
@@ -373,7 +373,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
 
     expect(res).to.have.status(200);
 
-    const afterSection = await Section.findById(section._id);
+    const afterSection = await VenueSection.findById(section._id);
     expect(afterSection.sold_count).to.equal(soldBefore - 3);
   });
 
@@ -430,5 +430,63 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
     expect(refundPayment).to.not.be.null;
     expect(refundPayment.status).to.equal('completed');
     expect(refundPayment.amount).to.equal(res.body.refund_amount);
+  });
+
+  // --- Test 13: should partially refund 2 of 3 tickets ---
+  it('should partially refund 2 of 3 tickets', async () => {
+    const { order, tickets } = await createConfirmedOrder(3);
+    const soldBefore = (await VenueSection.findById(section._id)).sold_count;
+
+    const res = await request
+      .execute(app)
+      .post(`/api/v1/orders/${order._id}/refund`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ticket_ids: [tickets[0]._id.toString(), tickets[1]._id.toString()] });
+
+    expect(res).to.have.status(200);
+    expect(res.body.tickets_refunded).to.equal(2);
+    expect(res.body.order_status).to.equal('partially_refunded');
+
+    // Verify DB: refunded tickets
+    const t0 = await Ticket.findById(tickets[0]._id);
+    const t1 = await Ticket.findById(tickets[1]._id);
+    const t2 = await Ticket.findById(tickets[2]._id);
+    expect(t0.status).to.equal('refunded');
+    expect(t1.status).to.equal('refunded');
+    expect(t2.status).to.equal('confirmed');
+
+    // Verify DB: order status
+    const updatedOrder = await Order.findById(order._id);
+    expect(updatedOrder.status).to.equal('partially_refunded');
+
+    // Verify DB: section sold_count decreased by 2
+    const updatedSection = await VenueSection.findById(section._id);
+    expect(updatedSection.sold_count).to.equal(soldBefore - 2);
+  });
+
+  // --- Test 14: should partially refund 1 of 4 tickets ---
+  it('should partially refund 1 of 4 tickets', async () => {
+    const { order, tickets } = await createConfirmedOrder(4);
+
+    const res = await request
+      .execute(app)
+      .post(`/api/v1/orders/${order._id}/refund`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ticket_ids: [tickets[0]._id.toString()] });
+
+    expect(res).to.have.status(200);
+
+    // Verify DB: 1 refunded, 3 confirmed
+    const refundedTicket = await Ticket.findById(tickets[0]._id);
+    expect(refundedTicket.status).to.equal('refunded');
+
+    const confirmedTickets = await Ticket.find({
+      _id: { $in: [tickets[1]._id, tickets[2]._id, tickets[3]._id] },
+    });
+    confirmedTickets.forEach((t) => expect(t.status).to.equal('confirmed'));
+
+    // Verify DB: order status
+    const updatedOrder = await Order.findById(order._id);
+    expect(updatedOrder.status).to.equal('partially_refunded');
   });
 });

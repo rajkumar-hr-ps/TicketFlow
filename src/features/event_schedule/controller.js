@@ -1,6 +1,6 @@
 import { Event, EventStatus } from '../../models/Event.js';
 import { Venue } from '../../models/Venue.js';
-import { Section } from '../../models/Section.js';
+import { VenueSection } from '../../models/VenueSection.js';
 import { getAvailableSeats } from '../../utils/helpers.js';
 
 export const getEventSchedule = async (req, res) => {
@@ -31,7 +31,7 @@ export const getEventSchedule = async (req, res) => {
   const venueMap = new Map(venues.map((v) => [v._id.toString(), v]));
 
   const eventIds = events.map((e) => e._id);
-  const sections = await Section.findActive({ event_id: { $in: eventIds } });
+  const sections = await VenueSection.findActive({ event_id: { $in: eventIds } });
 
   const sectionsByEvent = {};
   for (const section of sections) {

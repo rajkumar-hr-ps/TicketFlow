@@ -3,4 +3,4 @@ import { getSeatAvailabilityMap } from './controller.js';
 
 export const router = Router();
 
-router.get('/:id/sections/:sectionId/seat-map', getSeatAvailabilityMap);
+router.get('/:id/venue-sections/:sectionId/seat-map', getSeatAvailabilityMap);

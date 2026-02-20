@@ -1,4 +1,4 @@
-import { Section } from '../models/Section.js';
+import { VenueSection } from '../models/VenueSection.js';
 import { NotFoundError } from '../utils/AppError.js';
 import { roundMoney } from '../utils/helpers.js';
 
@@ -51,7 +51,7 @@ export const calculateTicketPrice = (basePrice, multiplier) => {
 };
 
 export const calculateOrderTotal = async (sectionId, quantity, promoCode = null) => {
-  const section = await Section.findOneActive({ _id: sectionId });
+  const section = await VenueSection.findOneActive({ _id: sectionId });
   if (!section) throw new NotFoundError('section not found');
 
   const tier = getDynamicMultiplier(section);

@@ -47,4 +47,4 @@ sectionSchema.index({ venue_id: 1 });
 
 sectionSchema.plugin(softDeletePlugin);
 
-export const Section = mongoose.model('Section', sectionSchema);
+export const VenueSection = mongoose.model('VenueSection', sectionSchema);

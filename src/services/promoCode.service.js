@@ -1,5 +1,7 @@
-import { PromoCode } from '../models/PromoCode.js';
+import { PromoCode, DISCOUNT_TYPES } from '../models/PromoCode.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
+
+const isValidDate = (v) => !isNaN(new Date(v).getTime());
 
 export const createPromoCode = async (data) => {
   const {
@@ -11,12 +13,42 @@ export const createPromoCode = async (data) => {
     throw new BadRequestError('code, discount_type, discount_value, max_uses, valid_from, and valid_to are required');
   }
 
-  if (discount_type === 'percentage' && (discount_value <= 0 || discount_value > 100)) {
+  if (typeof code !== 'string' || code.trim().length < 1 || code.trim().length > 50) {
+    throw new BadRequestError('code must be a string between 1 and 50 characters');
+  }
+
+  if (!DISCOUNT_TYPES.includes(discount_type)) {
+    throw new BadRequestError(`discount_type must be one of: ${DISCOUNT_TYPES.join(', ')}`);
+  }
+
+  if (typeof discount_value !== 'number' || discount_value <= 0) {
+    throw new BadRequestError('discount_value must be a positive number');
+  }
+
+  if (discount_type === 'percentage' && discount_value > 100) {
     throw new BadRequestError('percentage discount_value must be between 1 and 100');
   }
 
-  if (discount_type === 'fixed' && discount_value <= 0) {
-    throw new BadRequestError('fixed discount_value must be greater than 0');
+  if (typeof max_uses !== 'number' || !Number.isInteger(max_uses) || max_uses < 1) {
+    throw new BadRequestError('max_uses must be a positive integer');
+  }
+
+  if (!isValidDate(valid_from) || !isValidDate(valid_to)) {
+    throw new BadRequestError('valid_from and valid_to must be valid dates');
+  }
+
+  if (new Date(valid_to) <= new Date(valid_from)) {
+    throw new BadRequestError('valid_to must be after valid_from');
+  }
+
+  if (min_tickets !== undefined && (typeof min_tickets !== 'number' || !Number.isInteger(min_tickets) || min_tickets < 1)) {
+    throw new BadRequestError('min_tickets must be a positive integer');
+  }
+
+  if (max_discount_amount !== undefined && max_discount_amount !== null) {
+    if (typeof max_discount_amount !== 'number' || max_discount_amount <= 0) {
+      throw new BadRequestError('max_discount_amount must be a positive number');
+    }
   }
 
   const promo = new PromoCode({

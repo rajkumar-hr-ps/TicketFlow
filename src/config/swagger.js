@@ -74,7 +74,7 @@ const swaggerDefinition = {
           updated_at: { type: 'string', format: 'date-time' },
         },
       },
-      Section: {
+      VenueSection: {
         type: 'object',
         properties: {
           _id: { type: 'string' },
@@ -650,7 +650,7 @@ const swaggerDefinition = {
                       type: 'array',
                       items: {
                         allOf: [
-                          { $ref: '#/components/schemas/Section' },
+                          { $ref: '#/components/schemas/VenueSection' },
                           {
                             type: 'object',
                             properties: {
@@ -793,10 +793,10 @@ const swaggerDefinition = {
       },
     },
 
-    // ==================== Sections ====================
-    '/events/{id}/sections': {
+    // ==================== Venue Sections ====================
+    '/events/{id}/venue-sections': {
       get: {
-        tags: ['Sections'],
+        tags: ['Venue Sections'],
         summary: 'Get sections for an event',
         description: 'Returns all ticket sections for an event, including capacity, sold_count, held_count, and base_price.',
         parameters: [
@@ -818,7 +818,7 @@ const swaggerDefinition = {
                   properties: {
                     sections: {
                       type: 'array',
-                      items: { $ref: '#/components/schemas/Section' },
+                      items: { $ref: '#/components/schemas/VenueSection' },
                     },
                   },
                 },
@@ -828,9 +828,9 @@ const swaggerDefinition = {
         },
       },
     },
-    '/events/{eventId}/sections/{sectionId}/availability': {
+    '/events/{eventId}/venue-sections/{sectionId}/availability': {
       get: {
-        tags: ['Sections'],
+        tags: ['Venue Sections'],
         summary: 'Get section availability',
         description: 'Returns real-time availability for a specific section: capacity, sold_count, held_count, and available seats.',
         parameters: [
@@ -1383,7 +1383,7 @@ const swaggerDefinition = {
     // ==================== Features (src/features/) ====================
 
     // -------- Seat Map (features/seat_availability_map) --------
-    '/events/{id}/sections/{sectionId}/seat-map': {
+    '/events/{id}/venue-sections/{sectionId}/seat-map': {
       get: {
         tags: ['Seat Map'],
         summary: 'Get seat availability map for a section',
@@ -1907,7 +1907,7 @@ const swaggerDefinition = {
     { name: 'Auth', description: 'Authentication and user management' },
     { name: 'Venues', description: 'Venue management' },
     { name: 'Events', description: 'Event creation and management' },
-    { name: 'Sections', description: 'Event sections and availability' },
+    { name: 'Venue Sections', description: 'Venue sections and availability' },
     { name: 'Orders', description: 'Order creation and retrieval' },
     { name: 'Promo Codes', description: 'Promotional code management' },
     { name: 'Payments', description: 'Payment processing and webhooks' },

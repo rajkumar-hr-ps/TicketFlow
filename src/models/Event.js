@@ -6,7 +6,7 @@ export const EventStatus = {
   PUBLISHED: 'published',
   ON_SALE: 'on_sale',
   SOLD_OUT: 'sold_out',
-  COMPLETED: 'completed',
+  COMPLETED: 'completed', // TODO: rename to ENDED — discuss later
   CANCELLED: 'cancelled',
 };
 

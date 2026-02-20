@@ -1,4 +1,4 @@
-import { Section } from '../../models/Section.js';
+import { VenueSection } from '../../models/VenueSection.js';
 import { Event } from '../../models/Event.js';
 import { roundMoney, getAvailableSeats } from '../../utils/helpers.js';
 import { getPricingTier, SERVICE_FEE_RATE, FACILITY_FEE_RATE } from '../../services/pricing.service.js';
@@ -6,7 +6,7 @@ import { getPricingTier, SERVICE_FEE_RATE, FACILITY_FEE_RATE } from '../../servi
 export const getSeatAvailabilityMap = async (req, res) => {
   const { id: eventId, sectionId } = req.params;
 
-  const section = await Section.findOneActive({ _id: sectionId, event_id: eventId });
+  const section = await VenueSection.findOneActive({ _id: sectionId, event_id: eventId });
   if (!section) {
     return res.status(404).json({ error: 'section not found' });
   }

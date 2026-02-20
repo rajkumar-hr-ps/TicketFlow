@@ -1,4 +1,4 @@
-import { Section } from '../../models/Section.js';
+import { VenueSection } from '../../models/VenueSection.js';
 import { Event } from '../../models/Event.js';
 import { roundMoney, getAvailableSeats } from '../../utils/helpers.js';
 import { getPricingTier, SERVICE_FEE_RATE, FACILITY_FEE_RATE, PROCESSING_FEE } from '../../services/pricing.service.js';
@@ -21,7 +21,7 @@ export const getDynamicPricing = async (req, res) => {
     return res.status(404).json({ error: 'event not found' });
   }
 
-  const section = await Section.findOneActive({ _id: section_id, event_id: eventId });
+  const section = await VenueSection.findOneActive({ _id: section_id, event_id: eventId });
   if (!section) {
     return res.status(404).json({ error: 'section not found' });
   }
