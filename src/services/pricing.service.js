@@ -9,7 +9,7 @@ export const PRICING_TIERS = [
   { threshold: 0, multiplier: 1.0, label: 'standard' },
 ];
 
-function getPricingTier(sellThroughRatio) {
+export function getPricingTier(sellThroughRatio) {
   for (const tier of PRICING_TIERS) {
     if (sellThroughRatio >= tier.threshold) {
       return tier;

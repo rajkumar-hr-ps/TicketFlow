@@ -11,8 +11,3 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
 };
 
-export const JOB_CONCURRENCY = {
-  PAYMENT: 5,
-  HOLD_EXPIRY: 1,
-  WAITLIST_NOTIFIER: 3,
-};

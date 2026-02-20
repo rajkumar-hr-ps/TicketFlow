@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "bullmq": "^5.34.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
