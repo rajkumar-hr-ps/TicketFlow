@@ -6,7 +6,6 @@ export const getPayments = async (req, res) => {
 };
 
 export const handlePaymentWebhook = async (req, res) => {
-  const signature = req.headers['x-webhook-signature'];
-  const result = await paymentService.processWebhook(signature, req.body);
+  const result = await paymentService.processWebhook(req.body);
   res.json(result);
 };

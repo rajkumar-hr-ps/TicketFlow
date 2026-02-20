@@ -1,9 +1,7 @@
-import crypto from 'crypto';
 import { Payment, PaymentStatus } from '../models/Payment.js';
 import { Order, OrderStatus, OrderPaymentStatus } from '../models/Order.js';
 import { WebhookLog } from '../models/WebhookLog.js';
-import { config } from '../config/env.js';
-import { NotFoundError, UnauthorizedError, BadRequestError } from '../utils/AppError.js';
+import { NotFoundError, BadRequestError } from '../utils/AppError.js';
 import { confirmOrderTickets } from './ticket.service.js';
 
 export const getPaymentsByOrder = async (orderId) => {
@@ -41,9 +39,7 @@ const verifyWebhookSignature = (signature, body) => {
   }
 };
 
-export const processWebhook = async (signature, body) => {
-  verifyWebhookSignature(signature, body);
-
+export const processWebhook = async (body) => {
   const { payment_id, status, amount, webhook_event_id } = body;
 
   // Idempotency check

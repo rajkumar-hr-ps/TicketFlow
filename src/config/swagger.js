@@ -208,6 +208,9 @@ const swaggerDefinition = {
       post: {
         tags: ['Auth'],
         summary: 'Register a new user',
+        description:
+          'Creates a new user account and returns a JWT token. The token must be included as a Bearer token in the Authorization header for all protected endpoints.\n\n' +
+          '**Roles:** Defaults to **customer**. Use **organizer** to create/manage events, or **admin** for full access.',
         requestBody: {
           required: true,
           content: {
@@ -258,6 +261,8 @@ const swaggerDefinition = {
       post: {
         tags: ['Auth'],
         summary: 'Login and obtain a JWT token',
+        description:
+          'Authenticates with email and password. Returns a JWT token to use in the Authorization header as: **Bearer &lt;token&gt;**',
         requestBody: {
           required: true,
           content: {
@@ -301,6 +306,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Auth'],
         summary: 'Get current user profile',
+        description: 'Returns the profile of the currently authenticated user. Requires a valid JWT token.',
         security: [{ bearerAuth: [] }],
         responses: {
           200: {
@@ -331,6 +337,8 @@ const swaggerDefinition = {
       post: {
         tags: ['Venues'],
         summary: 'Create a new venue',
+        description:
+          'Creates a new venue. The venue ID is needed when creating events. Requires authentication.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -380,6 +388,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Venues'],
         summary: 'List all venues',
+        description: 'Returns all venues. Use the venue _id from the response when creating events.',
         responses: {
           200: {
             description: 'List of venues',
@@ -404,6 +413,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Venues'],
         summary: 'Get venue by ID',
+        description: 'Returns a single venue by its ID.',
         parameters: [
           {
             name: 'id',
@@ -442,6 +452,10 @@ const swaggerDefinition = {
       post: {
         tags: ['Events'],
         summary: 'Create a new event with optional sections',
+        description:
+          'Creates an event in `draft` status. Optionally pass a `sections` array to create ticket sections at the same time.\n\n' +
+          '**Status flow:** `draft` → `published` → `on_sale` (use `PATCH /events/{id}/status` to transition).\n\n' +
+          '**Note:** `venue_id` must be a valid venue ID from `GET /venues`. The `end_date` must be after `start_date`.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -451,26 +465,56 @@ const swaggerDefinition = {
                 type: 'object',
                 required: ['title', 'venue_id', 'start_date', 'end_date', 'category'],
                 properties: {
-                  title: { type: 'string', example: 'Rock Concert 2026' },
-                  description: { type: 'string', example: 'An amazing rock concert' },
-                  venue_id: { type: 'string' },
-                  start_date: { type: 'string', format: 'date-time' },
-                  end_date: { type: 'string', format: 'date-time' },
+                  title: { type: 'string', description: 'Event title (max 300 chars).', example: 'Rock Concert 2026' },
+                  description: { type: 'string', description: 'Optional. Event description (max 2000 chars).', example: 'An amazing rock concert' },
+                  venue_id: { type: 'string', description: 'ID of an existing venue. Get from GET /venues.', example: '6997ef07c1b70dc3d9e293e9' },
+                  start_date: { type: 'string', format: 'date-time', description: 'Event start time in ISO 8601 format.', example: '2026-03-15T18:00:00.000Z' },
+                  end_date: { type: 'string', format: 'date-time', description: 'Event end time. Must be after start_date.', example: '2026-03-15T22:00:00.000Z' },
                   category: {
                     type: 'string',
                     enum: ['concert', 'sports', 'theater', 'conference', 'festival', 'comedy'],
+                    description: 'Event category.',
+                    example: 'concert',
                   },
                   sections: {
                     type: 'array',
+                    description: 'Optional. Define ticket sections at creation time. Can also add sections later.',
                     items: {
                       type: 'object',
                       required: ['name', 'capacity', 'base_price'],
                       properties: {
-                        name: { type: 'string', example: 'VIP' },
-                        capacity: { type: 'integer', minimum: 1, example: 100 },
-                        base_price: { type: 'number', minimum: 0, example: 150.0 },
+                        name: { type: 'string', description: 'Section name (e.g. VIP, General, Balcony).', example: 'VIP' },
+                        capacity: { type: 'integer', minimum: 1, description: 'Maximum tickets available in this section.', example: 100 },
+                        base_price: { type: 'number', minimum: 0, description: 'Base ticket price before dynamic pricing fees.', example: 150.00 },
                       },
                     },
+                  },
+                },
+              },
+              examples: {
+                'Event with Sections': {
+                  summary: 'Create event with VIP and General sections',
+                  value: {
+                    title: 'Rock Concert 2026',
+                    description: 'An amazing rock concert',
+                    venue_id: '6997ef07c1b70dc3d9e293e9',
+                    start_date: '2026-03-15T18:00:00.000Z',
+                    end_date: '2026-03-15T22:00:00.000Z',
+                    category: 'concert',
+                    sections: [
+                      { name: 'VIP', capacity: 100, base_price: 150 },
+                      { name: 'General', capacity: 500, base_price: 50 },
+                    ],
+                  },
+                },
+                'Event without Sections': {
+                  summary: 'Create event only (add sections later)',
+                  value: {
+                    title: 'Comedy Night',
+                    venue_id: '6997ef07c1b70dc3d9e293e9',
+                    start_date: '2026-04-01T20:00:00.000Z',
+                    end_date: '2026-04-01T23:00:00.000Z',
+                    category: 'comedy',
                   },
                 },
               },
@@ -514,6 +558,8 @@ const swaggerDefinition = {
       get: {
         tags: ['Events'],
         summary: 'List events with optional filters and pagination',
+        description:
+          'Returns a paginated list of events. All query parameters are optional. You can filter by status, category, or venue_id. Supports pagination via page and limit.',
         parameters: [
           {
             name: 'status',
@@ -580,6 +626,8 @@ const swaggerDefinition = {
       get: {
         tags: ['Events'],
         summary: 'Get event by ID with sections and availability',
+        description:
+          'Returns event details along with its sections and available ticket counts. Use the section _id and event _id from this response when creating orders.',
         parameters: [
           {
             name: 'id',
@@ -630,6 +678,17 @@ const swaggerDefinition = {
       patch: {
         tags: ['Events'],
         summary: 'Update event status (state machine transitions)',
+        description:
+          'Transitions an event to a new status. Only valid transitions are allowed:\n\n' +
+          '| Current Status | Allowed Transitions |\n' +
+          '|---|---|\n' +
+          '| `draft` | `published` |\n' +
+          '| `published` | `on_sale`, `cancelled` |\n' +
+          '| `on_sale` | `sold_out`, `completed`, `cancelled` |\n' +
+          '| `sold_out` | `on_sale`, `completed`, `cancelled` |\n' +
+          '| `completed` | _(none)_ |\n' +
+          '| `cancelled` | _(none)_ |\n\n' +
+          '**Cancelling** an event with confirmed orders will automatically refund all orders and cancel held tickets.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -638,6 +697,7 @@ const swaggerDefinition = {
             required: true,
             schema: { type: 'string' },
             description: 'Event ID',
+            example: '6997f24063f79b24d3cc9dab',
           },
         ],
         requestBody: {
@@ -650,8 +710,23 @@ const swaggerDefinition = {
                 properties: {
                   status: {
                     type: 'string',
-                    enum: ['draft', 'published', 'on_sale', 'sold_out', 'completed', 'cancelled'],
+                    enum: ['published', 'on_sale', 'sold_out', 'completed', 'cancelled'],
+                    description: 'The target status. Must be a valid transition from the current status.',
                   },
+                },
+              },
+              examples: {
+                'Publish a draft': {
+                  summary: 'draft → published',
+                  value: { status: 'published' },
+                },
+                'Open ticket sales': {
+                  summary: 'published → on_sale',
+                  value: { status: 'on_sale' },
+                },
+                'Cancel event': {
+                  summary: 'Cancel and refund all orders',
+                  value: { status: 'cancelled' },
                 },
               },
             },
@@ -723,6 +798,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Sections'],
         summary: 'Get sections for an event',
+        description: 'Returns all ticket sections for an event, including capacity, sold_count, held_count, and base_price.',
         parameters: [
           {
             name: 'id',
@@ -756,6 +832,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Sections'],
         summary: 'Get section availability',
+        description: 'Returns real-time availability for a specific section: capacity, sold_count, held_count, and available seats.',
         parameters: [
           {
             name: 'eventId',
@@ -799,6 +876,11 @@ const swaggerDefinition = {
       post: {
         tags: ['Orders'],
         summary: 'Create a new order (single or multi-section)',
+        description:
+          'Creates an order and a pending payment record. Supports two modes:\n\n' +
+          '**Single-section:** Pass `event_id`, `section_id`, and `quantity`.\n\n' +
+          '**Multi-section:** Pass `event_id` and a `sections` array (do NOT pass `section_id`/`quantity`).\n\n' +
+          'The event must be in `on_sale` status.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -808,22 +890,82 @@ const swaggerDefinition = {
                 type: 'object',
                 required: ['event_id'],
                 properties: {
-                  event_id: { type: 'string' },
-                  section_id: { type: 'string', description: 'Required for single-section orders' },
-                  quantity: { type: 'integer', minimum: 1, description: 'Required for single-section orders' },
-                  promo_code: { type: 'string' },
-                  idempotency_key: { type: 'string' },
+                  event_id: {
+                    type: 'string',
+                    description: 'The ID of the event to order tickets for. Event must be in on_sale status.',
+                    example: '6997f24063f79b24d3cc9dab',
+                  },
+                  section_id: {
+                    type: 'string',
+                    description: 'Required for single-section orders. Omit when using the sections array.',
+                    example: '6997f24063f79b24d3cc9dad',
+                  },
+                  quantity: {
+                    type: 'integer',
+                    minimum: 1,
+                    description: 'Required for single-section orders. Number of tickets to purchase.',
+                    example: 2,
+                  },
+                  promo_code: {
+                    type: 'string',
+                    description: 'Optional. A valid promotional code for a discount.',
+                    example: 'SAVE20',
+                  },
+                  idempotency_key: {
+                    type: 'string',
+                    description: 'Optional. Unique key to prevent duplicate orders on retry.',
+                    example: 'order-user123-evt456-1',
+                  },
                   sections: {
                     type: 'array',
-                    description: 'For multi-section orders (alternative to section_id + quantity)',
+                    description:
+                      'For multi-section orders. Use this instead of section_id + quantity to order tickets from multiple sections at once.',
                     items: {
                       type: 'object',
                       required: ['section_id', 'quantity'],
                       properties: {
-                        section_id: { type: 'string' },
-                        quantity: { type: 'integer', minimum: 1 },
+                        section_id: {
+                          type: 'string',
+                          description: 'Section ID to order from.',
+                          example: '6997f24063f79b24d3cc9dad',
+                        },
+                        quantity: {
+                          type: 'integer',
+                          minimum: 1,
+                          description: 'Number of tickets for this section.',
+                          example: 2,
+                        },
                       },
                     },
+                  },
+                },
+              },
+              examples: {
+                'Single Section': {
+                  summary: 'Order from one section',
+                  value: {
+                    event_id: '6997f24063f79b24d3cc9dab',
+                    section_id: '6997f24063f79b24d3cc9dad',
+                    quantity: 2,
+                  },
+                },
+                'Single Section with Promo': {
+                  summary: 'Order with a promo code applied',
+                  value: {
+                    event_id: '6997f24063f79b24d3cc9dab',
+                    section_id: '6997f24063f79b24d3cc9dad',
+                    quantity: 2,
+                    promo_code: 'SAVE20',
+                  },
+                },
+                'Multi Section': {
+                  summary: 'Order from multiple sections at once',
+                  value: {
+                    event_id: '6997f24063f79b24d3cc9dab',
+                    sections: [
+                      { section_id: '6997f24063f79b24d3cc9dad', quantity: 2 },
+                      { section_id: '6997f24063f79b24d3cc9dae', quantity: 1 },
+                    ],
                   },
                 },
               },
@@ -875,6 +1017,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Orders'],
         summary: 'Get current user orders',
+        description: 'Returns all orders for the currently authenticated user, sorted by most recent.',
         security: [{ bearerAuth: [] }],
         responses: {
           200: {
@@ -906,6 +1049,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Orders'],
         summary: 'Get order by ID',
+        description: 'Returns full order details including populated ticket information. Use the order _id from this response to fetch payments or request a refund.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -945,69 +1089,17 @@ const swaggerDefinition = {
         },
       },
     },
-    '/orders/{id}/refund': {
-      post: {
-        tags: ['Orders'],
-        summary: 'Process a refund for an order (tiered by time until event)',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'id',
-            in: 'path',
-            required: true,
-            schema: { type: 'string' },
-            description: 'Order ID',
-          },
-        ],
-        responses: {
-          200: {
-            description: 'Refund processed',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    refund_amount: { type: 'number' },
-                    refund_tier: { type: 'string' },
-                    refund_percentage: { type: 'number' },
-                    base_refund: { type: 'number' },
-                    facility_fee_refund: { type: 'number' },
-                    service_fee_refund: { type: 'number' },
-                    processing_fee_refund: { type: 'number' },
-                    tickets_refunded: { type: 'integer' },
-                    order_status: { type: 'string' },
-                  },
-                },
-              },
-            },
-          },
-          400: {
-            description: 'Order not eligible for refund',
-            content: {
-              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-            },
-          },
-          401: {
-            description: 'Unauthorized',
-            content: {
-              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-            },
-          },
-          404: {
-            description: 'Order not found',
-            content: {
-              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-            },
-          },
-        },
-      },
-    },
 
     // ==================== Promo Codes ====================
     '/promo-codes': {
       post: {
         tags: ['Promo Codes'],
         summary: 'Create a promo code',
+        description:
+          'Creates a promotional discount code. Codes can be scoped to a specific event or apply platform-wide.\n\n' +
+          '**Discount types:**\n' +
+          '- `percentage` — discount_value is a % (1–100). Optionally cap with `max_discount_amount`.\n' +
+          '- `fixed` — discount_value is a flat dollar amount deducted from the total.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1017,15 +1109,42 @@ const swaggerDefinition = {
                 type: 'object',
                 required: ['code', 'discount_type', 'discount_value', 'max_uses', 'valid_from', 'valid_to'],
                 properties: {
-                  code: { type: 'string', example: 'SUMMER20' },
-                  event_id: { type: 'string', nullable: true, description: 'Null for platform-wide codes' },
-                  discount_type: { type: 'string', enum: ['percentage', 'fixed'] },
-                  discount_value: { type: 'number', minimum: 0, example: 20 },
-                  max_uses: { type: 'integer', minimum: 1, example: 100 },
-                  valid_from: { type: 'string', format: 'date-time' },
-                  valid_to: { type: 'string', format: 'date-time' },
-                  min_tickets: { type: 'integer', default: 1 },
-                  max_discount_amount: { type: 'number', nullable: true },
+                  code: { type: 'string', description: 'Unique promo code string. Case-sensitive.', example: 'SUMMER20' },
+                  event_id: { type: 'string', nullable: true, description: 'Optional. Scope to a specific event. Omit or null for a platform-wide code.', example: '6997f24063f79b24d3cc9dab' },
+                  discount_type: { type: 'string', enum: ['percentage', 'fixed'], description: '"percentage" for % off, "fixed" for flat dollar amount off.', example: 'percentage' },
+                  discount_value: { type: 'number', minimum: 0, description: 'For percentage: 1–100. For fixed: dollar amount (e.g. 10 = $10 off).', example: 20 },
+                  max_uses: { type: 'integer', minimum: 1, description: 'Maximum number of times this code can be redeemed.', example: 100 },
+                  valid_from: { type: 'string', format: 'date-time', description: 'Code is valid starting from this date.', example: '2026-02-01T00:00:00.000Z' },
+                  valid_to: { type: 'string', format: 'date-time', description: 'Code expires after this date.', example: '2026-12-31T23:59:59.000Z' },
+                  min_tickets: { type: 'integer', default: 1, description: 'Optional. Minimum tickets in the order for the code to apply.', example: 2 },
+                  max_discount_amount: { type: 'number', nullable: true, description: 'Optional. Cap on the discount for percentage codes (e.g. "20% off, max $50"). Ignored for fixed type.', example: 50 },
+                },
+              },
+              examples: {
+                'Percentage (platform-wide)': {
+                  summary: '20% off, max $50, any event',
+                  value: {
+                    code: 'SAVE20',
+                    discount_type: 'percentage',
+                    discount_value: 20,
+                    max_uses: 100,
+                    valid_from: '2026-02-01T00:00:00.000Z',
+                    valid_to: '2026-12-31T23:59:59.000Z',
+                    max_discount_amount: 50,
+                  },
+                },
+                'Fixed (event-specific)': {
+                  summary: '$10 off for a specific event, min 2 tickets',
+                  value: {
+                    code: 'CONCERT10',
+                    event_id: '6997f24063f79b24d3cc9dab',
+                    discount_type: 'fixed',
+                    discount_value: 10,
+                    max_uses: 50,
+                    valid_from: '2026-02-01T00:00:00.000Z',
+                    valid_to: '2026-03-15T00:00:00.000Z',
+                    min_tickets: 2,
+                  },
                 },
               },
             },
@@ -1064,6 +1183,8 @@ const swaggerDefinition = {
       get: {
         tags: ['Promo Codes'],
         summary: 'Validate a promo code',
+        description:
+          'Checks if a promo code is valid. Validates expiry dates, max usage, event scope, and minimum ticket requirements. Pass event_id and quantity to check all conditions.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -1124,6 +1245,8 @@ const swaggerDefinition = {
       get: {
         tags: ['Payments'],
         summary: 'Get payments for an order',
+        description:
+          'Returns all payment records for an order. A payment is auto-created when an order is placed. Use the payment _id and amount from this response when calling the webhook endpoint.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -1163,30 +1286,67 @@ const swaggerDefinition = {
     '/webhook': {
       post: {
         tags: ['Payments'],
-        summary: 'Payment webhook endpoint (HMAC signature verified)',
-        parameters: [
-          {
-            name: 'x-webhook-signature',
-            in: 'header',
-            required: true,
-            schema: { type: 'string' },
-            description: 'HMAC signature for webhook verification',
-          },
-        ],
+        summary: 'Payment webhook endpoint',
+        description:
+          'Simulates a payment provider webhook callback. Use this to mark a pending payment as completed or failed.\n\n' +
+          '**How to get the required values:**\n\n' +
+          '**Step 1:** Create an order via POST /orders — this auto-creates a pending payment.\n\n' +
+          '**Step 2:** Fetch payments via GET /orders/{id}/payments to get the payment_id and amount.\n\n' +
+          '**Step 3:** Call this endpoint with those values to complete or fail the payment.',
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
+                required: ['webhook_event_id', 'payment_id', 'status', 'amount'],
                 properties: {
-                  webhook_event_id: { type: 'string' },
-                  payment_id: { type: 'string' },
-                  status: { type: 'string', enum: ['completed', 'failed'] },
-                  amount: { type: 'number' },
+                  webhook_event_id: {
+                    type: 'string',
+                    description: 'A unique ID for this webhook event. Used for idempotency — sending the same ID twice will be ignored as a duplicate.',
+                    example: 'evt_001',
+                  },
+                  payment_id: {
+                    type: 'string',
+                    description: 'The payment ID to update. Retrieve from GET /orders/{id}/payments.',
+                    example: '6997f30063f79b24d3cc9db0',
+                  },
+                  status: {
+                    type: 'string',
+                    enum: ['completed', 'failed'],
+                    description: 'The payment result. "completed" confirms the order and issues tickets. "failed" marks the payment as failed.',
+                    example: 'completed',
+                  },
+                  amount: {
+                    type: 'number',
+                    description: 'Must match the order total_amount exactly. A mismatch will be rejected.',
+                    example: 150.00,
+                  },
                   payment_method: {
                     type: 'string',
                     enum: ['credit_card', 'debit_card', 'wallet'],
+                    description: 'Optional. The payment method used.',
+                    example: 'credit_card',
+                  },
+                },
+              },
+              examples: {
+                'Successful Payment': {
+                  summary: 'Mark payment as completed',
+                  value: {
+                    webhook_event_id: 'evt_001',
+                    payment_id: '6997f30063f79b24d3cc9db0',
+                    status: 'completed',
+                    amount: 150.00,
+                  },
+                },
+                'Failed Payment': {
+                  summary: 'Mark payment as failed',
+                  value: {
+                    webhook_event_id: 'evt_002',
+                    payment_id: '6997f30063f79b24d3cc9db0',
+                    status: 'failed',
+                    amount: 150.00,
                   },
                 },
               },
@@ -1220,11 +1380,15 @@ const swaggerDefinition = {
       },
     },
 
-    // ==================== Seat Map ====================
+    // ==================== Features (src/features/) ====================
+
+    // -------- Seat Map (features/seat_availability_map) --------
     '/events/{id}/sections/{sectionId}/seat-map': {
       get: {
         tags: ['Seat Map'],
         summary: 'Get seat availability map for a section',
+        description:
+          'Returns a detailed seat map for a section including capacity, sold/held/available counts, sell-through percentage, dynamic pricing (base_price, multiplier, current_price, fees), and overall status (available or sold_out).',
         parameters: [
           {
             name: 'id',
@@ -1285,25 +1449,29 @@ const swaggerDefinition = {
       },
     },
 
-    // ==================== Schedule ====================
+    // -------- Schedule (features/event_schedule) --------
     '/events/schedule': {
       get: {
         tags: ['Schedule'],
         summary: 'Get event schedule grouped by venue',
+        description:
+          'Returns all events within a date range, grouped by venue. Each event includes section count, total available tickets, and price range. Useful for displaying a calendar or schedule view.',
         parameters: [
           {
             name: 'start_date',
             in: 'query',
             required: true,
             schema: { type: 'string', format: 'date-time' },
-            description: 'Schedule period start',
+            description: 'Schedule period start. ISO 8601 format.',
+            example: '2026-02-01T00:00:00.000Z',
           },
           {
             name: 'end_date',
             in: 'query',
             required: true,
             schema: { type: 'string', format: 'date-time' },
-            description: 'Schedule period end',
+            description: 'Schedule period end. ISO 8601 format.',
+            example: '2026-02-28T23:59:59.000Z',
           },
         ],
         responses: {
@@ -1366,11 +1534,13 @@ const swaggerDefinition = {
       },
     },
 
-    // ==================== Waitlist ====================
+    // -------- Waitlist (features/waitlist_management) --------
     '/events/{id}/waitlist': {
       post: {
         tags: ['Waitlist'],
         summary: 'Join the waitlist for a sold-out event',
+        description:
+          'Adds the current user to the waitlist for an event. The event must be in **sold_out** status. Returns the user\'s position in the queue. You cannot join a waitlist twice for the same event.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -1378,7 +1548,7 @@ const swaggerDefinition = {
             in: 'path',
             required: true,
             schema: { type: 'string' },
-            description: 'Event ID',
+            description: 'Event ID. The event must be in sold_out status.',
           },
         ],
         responses: {
@@ -1429,6 +1599,7 @@ const swaggerDefinition = {
       get: {
         tags: ['Waitlist'],
         summary: 'Get current user waitlist position for an event',
+        description: 'Returns the current user\'s waitlist position, number of people ahead, and total waiting count. Returns 404 if the user is not on the waitlist.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -1475,11 +1646,18 @@ const swaggerDefinition = {
       },
     },
 
-    // ==================== Ticket Transfer ====================
+    // -------- Ticket Transfer (features/ticket_transfer) --------
     '/tickets/{id}/transfer': {
       post: {
         tags: ['Ticket Transfer'],
         summary: 'Transfer a ticket to another user by email',
+        description:
+          'Transfers a ticket to another registered user. The original ticket is marked as transferred and a new ticket is created for the recipient.\n\n' +
+          '**Requirements:**\n\n' +
+          '1. Ticket must be in **confirmed** status (not held, cancelled, used, or already transferred).\n\n' +
+          '2. The event must not have started yet.\n\n' +
+          '3. The recipient must be a registered user (looked up by email).\n\n' +
+          '4. You cannot transfer a ticket to yourself.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -1487,7 +1665,8 @@ const swaggerDefinition = {
             in: 'path',
             required: true,
             schema: { type: 'string' },
-            description: 'Ticket ID',
+            description: 'Ticket ID. Must be a confirmed ticket owned by the current user.',
+            example: '6997f30063f79b24d3cc9dc0',
           },
         ],
         requestBody: {
@@ -1498,7 +1677,7 @@ const swaggerDefinition = {
                 type: 'object',
                 required: ['to_email'],
                 properties: {
-                  to_email: { type: 'string', format: 'email', example: 'recipient@example.com' },
+                  to_email: { type: 'string', format: 'email', description: 'Email of the recipient. Must be a registered user.', example: 'recipient@example.com' },
                 },
               },
             },
@@ -1546,11 +1725,18 @@ const swaggerDefinition = {
       },
     },
 
-    // ==================== Dynamic Pricing ====================
+    // -------- Dynamic Pricing (features/dynamic_pricing) --------
     '/events/{id}/pricing': {
       get: {
         tags: ['Dynamic Pricing'],
         summary: 'Get dynamic pricing for an event section',
+        description:
+          'Calculates the current ticket price based on demand (sell-through percentage). Returns the base price, dynamic multiplier, per-ticket fees (service fee 12%, facility fee 5%), processing fee ($3.00 flat), and totals for the requested quantity.\n\n' +
+          '**Pricing tiers by sell-through:**\n\n' +
+          '0–49% → 1.0x standard (base price)\n\n' +
+          '50–74% → 1.25x high_demand\n\n' +
+          '75–89% → 1.5x very_high_demand\n\n' +
+          '90%+ → 2.0x peak (surge pricing)',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -1644,20 +1830,94 @@ const swaggerDefinition = {
         },
       },
     },
+
+    // -------- Refund Processing (features/refund_processing) --------
+    '/orders/{id}/refund': {
+      post: {
+        tags: ['Refund Processing'],
+        summary: 'Process a refund for an order (tiered by time until event)',
+        description:
+          'Refunds a confirmed order. The refund percentage depends on how far the event is:\n\n' +
+          '| Time Until Event | Refund | Tier |\n' +
+          '|---|---|---|\n' +
+          '| > 7 days (168h) | 100% | full_refund |\n' +
+          '| > 3 days (72h) | 75% | 75_percent |\n' +
+          '| > 1 day (24h) | 50% | 50_percent |\n' +
+          '| < 24 hours | **Not allowed** | — |\n\n' +
+          'Organizer cancellations always receive a 100% refund regardless of timing.\n\n' +
+          '**Note:** Service fees and processing fees are non-refundable. Facility fees are refunded at the same tier percentage. ' +
+          'The order must be in confirmed status with paid payment status.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+            description: 'Order ID. The order must be confirmed and paid.',
+            example: '6997f30063f79b24d3cc9db5',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Refund processed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    refund_amount: { type: 'number' },
+                    refund_tier: { type: 'string' },
+                    refund_percentage: { type: 'number' },
+                    base_refund: { type: 'number' },
+                    facility_fee_refund: { type: 'number' },
+                    service_fee_refund: { type: 'number' },
+                    processing_fee_refund: { type: 'number' },
+                    tickets_refunded: { type: 'integer' },
+                    order_status: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: 'Order not eligible for refund',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
+            },
+          },
+          401: {
+            description: 'Unauthorized',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
+            },
+          },
+          404: {
+            description: 'Order not found',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Error' } },
+            },
+          },
+        },
+      },
+    },
   },
   tags: [
+    // ── Core ──
     { name: 'Auth', description: 'Authentication and user management' },
     { name: 'Venues', description: 'Venue management' },
     { name: 'Events', description: 'Event creation and management' },
     { name: 'Sections', description: 'Event sections and availability' },
-    { name: 'Orders', description: 'Order creation, retrieval, and refunds' },
+    { name: 'Orders', description: 'Order creation and retrieval' },
     { name: 'Promo Codes', description: 'Promotional code management' },
     { name: 'Payments', description: 'Payment processing and webhooks' },
-    { name: 'Seat Map', description: 'Seat availability map' },
-    { name: 'Schedule', description: 'Event schedule by venue' },
-    { name: 'Waitlist', description: 'Waitlist management for sold-out events' },
-    { name: 'Ticket Transfer', description: 'Transfer tickets between users' },
-    { name: 'Dynamic Pricing', description: 'Dynamic pricing based on demand' },
+    // ── Features (src/features/) ──
+    { name: 'Seat Map', description: 'Feature: Seat availability map — src/features/seat_availability_map' },
+    { name: 'Schedule', description: 'Feature: Event schedule grouped by venue — src/features/event_schedule' },
+    { name: 'Waitlist', description: 'Feature: Waitlist management for sold-out events — src/features/waitlist_management' },
+    { name: 'Ticket Transfer', description: 'Feature: Transfer tickets between users — src/features/ticket_transfer' },
+    { name: 'Dynamic Pricing', description: 'Feature: Dynamic pricing based on demand — src/features/dynamic_pricing' },
+    { name: 'Refund Processing', description: 'Feature: Tiered refund processing — src/features/refund_processing' },
   ],
 };
 
