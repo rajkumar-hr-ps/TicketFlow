@@ -13,6 +13,7 @@ import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
+import { randomPrice, computeTicketPrice } from '../helpers/pricing.js';
 
 use(chaiHttp);
 
@@ -29,6 +30,7 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
   this.timeout(15000);
 
   let alice, bob, aliceToken, bobToken, venue, event, section, order;
+  let basePrice, unitPrice, serviceFee, facilityFee;
 
   before(async () => {
     process.env.NODE_ENV = 'test';
@@ -92,12 +94,15 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
     });
     await event.save();
 
+    basePrice = randomPrice(50, 200);
+    ({ unitPrice, serviceFee, facilityFee } = computeTicketPrice(basePrice, 1.0));
+
     section = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
+      base_price: basePrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -151,9 +156,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     const res = await request
@@ -163,6 +168,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       .send({ to_email: 'alice@test.com' });
 
     expect(res).to.have.status(404);
+
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
   });
 
   // --- Test 03: Ticket is not confirmed ---
@@ -174,9 +182,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'refunded',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     const res = await request
@@ -187,6 +195,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('only confirmed tickets');
+
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('refunded');
   });
 
   // --- Test 04: Event has already started ---
@@ -209,9 +220,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     const res = await request
@@ -222,6 +233,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('have started');
+
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
 
     await Event.deleteOne({ _id: pastEvent._id });
   });
@@ -235,9 +249,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     const res = await request
@@ -248,6 +262,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
 
     expect(res).to.have.status(404);
     expect(res.body.error).to.include('recipient user not found');
+
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
   });
 
   // --- Test 06: Cannot transfer to yourself ---
@@ -259,9 +276,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     const res = await request
@@ -272,6 +289,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('yourself');
+
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
   });
 
   // --- Test 07: Successful transfer invalidates original ticket ---
@@ -283,9 +303,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     const res = await request
@@ -295,6 +315,11 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       .send({ to_email: 'bob@test.com' });
 
     expect(res).to.have.status(200);
+
+    // Response structure validation
+    expect(res.body).to.have.property('original_ticket_id');
+    expect(res.body).to.have.property('new_ticket_id');
+    expect(res.body).to.have.property('transferred_at');
 
     const originalTicket = await Ticket.findById(ticket._id);
     expect(originalTicket.status).to.equal('transferred');
@@ -310,9 +335,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     const res = await request
@@ -327,9 +352,13 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
     expect(newTicket).to.not.be.null;
     expect(newTicket.user_id.toString()).to.equal(bob._id.toString());
     expect(newTicket.status).to.equal('confirmed');
-    expect(newTicket.unit_price).to.equal(100);
-    expect(newTicket.service_fee).to.equal(12);
-    expect(newTicket.facility_fee).to.equal(5);
+    expect(newTicket.unit_price).to.equal(unitPrice);
+    expect(newTicket.service_fee).to.equal(serviceFee);
+    expect(newTicket.facility_fee).to.equal(facilityFee);
+
+    // Verify total ticket count: original (transferred) + new (confirmed)
+    const totalTickets = await Ticket.countDocuments({ event_id: event._id });
+    expect(totalTickets).to.equal(2);
   });
 
   // --- Test 09: Preserve original_user_id through transfer chain ---
@@ -341,9 +370,9 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
       user_id: alice._id,
       original_user_id: alice._id,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
 
     // Alice transfers to Bob
@@ -359,5 +388,29 @@ describe('Bug 5 — Ticket Transfer with Ownership Chain', function () {
     expect(newTicket).to.not.be.null;
     // original_user_id should be Alice (the original purchaser), not Bob
     expect(newTicket.original_user_id.toString()).to.equal(alice._id.toString());
+  });
+
+  // --- Test 10: should return 400 when to_email is missing ---
+  it('should return 400 when to_email is missing', async () => {
+    const ticket = await Ticket.create({
+      order_id: order._id,
+      event_id: event._id,
+      section_id: section._id,
+      user_id: alice._id,
+      original_user_id: alice._id,
+      status: 'confirmed',
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
+    });
+
+    const res = await request
+      .execute(app)
+      .post(`/api/v1/tickets/${ticket._id}/transfer`)
+      .set('Authorization', `Bearer ${aliceToken}`)
+      .send({});
+
+    expect(res).to.have.status(400);
+    expect(res.body.error || res.body.message).to.match(/to_email|email/i);
   });
 });

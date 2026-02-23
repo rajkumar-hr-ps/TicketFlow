@@ -15,6 +15,10 @@ import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
 import { PromoCode } from '../../src/models/PromoCode.js';
+import {
+  randomInt, randomPrice, roundMoney,
+  computeTicketPrice,
+} from '../helpers/pricing.js';
 
 use(chaiHttp);
 
@@ -30,7 +34,7 @@ const cleanupModels = async (
 describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', function () {
   this.timeout(15000);
 
-  let user, token, venue, event;
+  let user, user2, token, token2, venue, event;
 
   before(async () => {
     process.env.NODE_ENV = 'test';
@@ -65,6 +69,15 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
     });
     await user.save();
     token = generateToken(user._id);
+
+    user2 = new User({
+      name: 'Other Customer',
+      email: 'other_customer@test.com',
+      password: 'password123',
+      role: 'customer',
+    });
+    await user2.save();
+    token2 = generateToken(user2._id);
 
     venue = new Venue({
       name: 'Test Arena',
@@ -103,16 +116,19 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
   });
 
   // --- Helper: create a dummy order for ticket creation ---
-  const createDummyOrder = async () => {
+  const createDummyOrder = async (opts = {}) => {
+    const up = opts.unitPrice || 100;
+    const sf = opts.serviceFee || 12;
+    const ff = opts.facilityFee || 5;
     return await Order.create({
       user_id: user._id,
       event_id: event._id,
       quantity: 1,
-      subtotal: 100,
-      service_fee_total: 12,
-      facility_fee_total: 5,
+      subtotal: up,
+      service_fee_total: sf,
+      facility_fee_total: ff,
       processing_fee: 3,
-      total_amount: 120,
+      total_amount: roundMoney(up + sf + ff + 3),
       status: 'pending',
       payment_status: 'pending',
       idempotency_key: new mongoose.Types.ObjectId().toString(),
@@ -120,7 +136,10 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
   };
 
   // --- Helper: create a held ticket with Redis key ---
-  const createHeldTicket = async (section, order) => {
+  const createHeldTicket = async (section, order, opts = {}) => {
+    const up = opts.unitPrice || 100;
+    const sf = opts.serviceFee || 12;
+    const ff = opts.facilityFee || 5;
     const ticket = await Ticket.create({
       order_id: order._id,
       event_id: event._id,
@@ -128,9 +147,9 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
       user_id: user._id,
       original_user_id: user._id,
       status: 'held',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: up,
+      service_fee: sf,
+      facility_fee: ff,
       hold_expires_at: new Date(Date.now() + 5 * 60 * 1000),
     });
 
@@ -189,18 +208,23 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
   // --- Test 03: should decrement section held_count after confirming ---
   it('should decrement section held_count after confirming', async () => {
+    const basePrice = randomPrice(50, 200);
+    const { unitPrice, serviceFee, facilityFee } = computeTicketPrice(basePrice, 1.0);
+    const soldCount = randomInt(10, 80);
+    const heldCount = randomInt(2, 10);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
-      sold_count: 50,
-      held_count: 5,
+      base_price: basePrice,
+      sold_count: soldCount,
+      held_count: heldCount,
     });
 
-    const order = await createDummyOrder();
-    const ticket = await createHeldTicket(section, order);
+    const order = await createDummyOrder({ unitPrice, serviceFee, facilityFee });
+    const ticket = await createHeldTicket(section, order, { unitPrice, serviceFee, facilityFee });
 
     const res = await request
       .execute(app)
@@ -210,23 +234,29 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
     expect(res).to.have.status(200);
 
     const updatedSection = await VenueSection.findById(section._id);
-    expect(updatedSection.held_count).to.equal(4);
+    expect(updatedSection.held_count).to.equal(heldCount - 1);
+    expect(updatedSection.sold_count).to.equal(soldCount + 1);
   });
 
   // --- Test 04: should increment section sold_count after confirming ---
   it('should increment section sold_count after confirming', async () => {
+    const basePrice = randomPrice(50, 200);
+    const { unitPrice, serviceFee, facilityFee } = computeTicketPrice(basePrice, 1.0);
+    const soldCount = randomInt(10, 80);
+    const heldCount = randomInt(2, 10);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
-      sold_count: 50,
-      held_count: 5,
+      base_price: basePrice,
+      sold_count: soldCount,
+      held_count: heldCount,
     });
 
-    const order = await createDummyOrder();
-    const ticket = await createHeldTicket(section, order);
+    const order = await createDummyOrder({ unitPrice, serviceFee, facilityFee });
+    const ticket = await createHeldTicket(section, order, { unitPrice, serviceFee, facilityFee });
 
     const res = await request
       .execute(app)
@@ -236,7 +266,8 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
     expect(res).to.have.status(200);
 
     const updatedSection = await VenueSection.findById(section._id);
-    expect(updatedSection.sold_count).to.equal(51);
+    expect(updatedSection.sold_count).to.equal(soldCount + 1);
+    expect(updatedSection.held_count).to.equal(heldCount - 1);
   });
 
   // --- Test 05: should remove Redis hold key after confirming ---
@@ -345,8 +376,47 @@ describe('Bug 3 — Hold-to-Purchase Confirmation with Counter Transitions', fun
 
     expect(res).to.have.status(200);
 
+    // Response body validation
+    expect(res.body.ticket || res.body).to.have.property('status', 'confirmed');
+
     const updatedTicket = await Ticket.findById(ticket._id);
     expect(updatedTicket.status).to.equal('confirmed');
     expect(updatedTicket.hold_expires_at).to.be.null;
+  });
+
+  // --- Test 09: should keep event on_sale when one section sells out but another has seats ---
+  it('should keep event on_sale when one section sells out but another has seats', async () => {
+    const sectionA = await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'VIP',
+      capacity: 1,
+      base_price: 200,
+      sold_count: 0,
+      held_count: 1,
+    });
+
+    await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'General Admission',
+      capacity: 100,
+      base_price: 50,
+      sold_count: 0,
+      held_count: 0,
+    });
+
+    const order = await createDummyOrder();
+    const ticket = await createHeldTicket(sectionA, order);
+
+    const res = await request
+      .execute(app)
+      .post(`/api/v1/tickets/${ticket._id}/confirm`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res).to.have.status(200);
+
+    const updatedEvent = await Event.findById(event._id);
+    expect(updatedEvent.status).to.equal('on_sale');
   });
 });

@@ -14,6 +14,7 @@ import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
 import { PromoCode } from '../../src/models/PromoCode.js';
+import { randomInt, randomPrice } from '../helpers/pricing.js';
 
 use(chaiHttp);
 
@@ -171,12 +172,18 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
 
   // --- Test 03: should create multi-section order successfully ---
   it('should create multi-section order successfully', async () => {
+    const vipPrice = randomPrice(100, 300);
+    const orchPrice = randomPrice(50, 150);
+    const vipQty = randomInt(1, 4);
+    const orchQty = randomInt(1, 4);
+    const totalQty = vipQty + orchQty;
+
     const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
       capacity: 50,
-      base_price: 200,
+      base_price: vipPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -187,7 +194,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
+      base_price: orchPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -200,21 +207,21 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       .send({
         event_id: event._id.toString(),
         sections: [
-          { section_id: vipSection._id.toString(), quantity: 2 },
-          { section_id: orchestraSection._id.toString(), quantity: 3 },
+          { section_id: vipSection._id.toString(), quantity: vipQty },
+          { section_id: orchestraSection._id.toString(), quantity: orchQty },
         ],
       });
 
     expect(res).to.have.status(201);
     expect(res.body.order).to.exist;
-    expect(res.body.order.quantity).to.equal(5);
-    expect(res.body.order.tickets).to.be.an('array').with.lengthOf(5);
+    expect(res.body.order.quantity).to.equal(totalQty);
+    expect(res.body.order.tickets).to.be.an('array').with.lengthOf(totalQty);
     expect(res.body.total_amount).to.be.a('number');
 
     // DB verification: order persisted correctly
     const dbOrder = await Order.findById(res.body.order._id);
     expect(dbOrder).to.not.be.null;
-    expect(dbOrder.quantity).to.equal(5);
+    expect(dbOrder.quantity).to.equal(totalQty);
     expect(dbOrder.status).to.be.oneOf(['pending', 'confirmed']);
   });
 
@@ -255,7 +262,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       });
 
     expect(res).to.have.status(400);
-    expect(res.body.error).to.match(/insufficient capacity|capacity/i);
+    expect(res.body.error).to.match(/insufficient capacity|not enough/i);
 
     // Verify VIP section held_count is still 0 (rolled back)
     const updatedVip = await VenueSection.findById(vipSection._id);
@@ -308,8 +315,8 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
     const ticketCount = await Ticket.countDocuments({ event_id: event._id });
     expect(ticketCount).to.equal(0);
 
-    // DB verification: no order was created
-    const orderCount = await Order.countDocuments({ event_id: event._id });
+    // DB verification: no order was created for this user/event
+    const orderCount = await Order.countDocuments({ user_id: user._id, event_id: event._id });
     expect(orderCount).to.equal(0);
   });
 
@@ -362,12 +369,17 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
 
   // --- Test 07: should correctly increment held_count for each section on success ---
   it('should correctly increment held_count for each section on success', async () => {
+    const vipPrice = randomPrice(100, 300);
+    const orchPrice = randomPrice(50, 150);
+    const vipQty = randomInt(1, 5);
+    const orchQty = randomInt(1, 5);
+
     const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
       capacity: 50,
-      base_price: 200,
+      base_price: vipPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -378,7 +390,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
+      base_price: orchPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -391,20 +403,20 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       .send({
         event_id: event._id.toString(),
         sections: [
-          { section_id: vipSection._id.toString(), quantity: 3 },
-          { section_id: orchestraSection._id.toString(), quantity: 2 },
+          { section_id: vipSection._id.toString(), quantity: vipQty },
+          { section_id: orchestraSection._id.toString(), quantity: orchQty },
         ],
       });
 
     expect(res).to.have.status(201);
 
-    // Verify VIP held_count incremented to 3
+    // Verify VIP held_count incremented
     const updatedVip = await VenueSection.findById(vipSection._id);
-    expect(updatedVip.held_count).to.equal(3);
+    expect(updatedVip.held_count).to.equal(vipQty);
 
-    // Verify Orchestra held_count incremented to 2
+    // Verify Orchestra held_count incremented
     const updatedOrchestra = await VenueSection.findById(orchestraSection._id);
-    expect(updatedOrchestra.held_count).to.equal(2);
+    expect(updatedOrchestra.held_count).to.equal(orchQty);
   });
 
   // --- Test 08: should not change held_count on failure ---
@@ -455,12 +467,18 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
 
   // --- Test 09: should create correct number of tickets on success ---
   it('should create correct number of tickets on success', async () => {
+    const vipPrice = randomPrice(100, 300);
+    const orchPrice = randomPrice(50, 150);
+    const vipQty = randomInt(1, 5);
+    const orchQty = randomInt(1, 5);
+    const totalQty = vipQty + orchQty;
+
     const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
       capacity: 50,
-      base_price: 200,
+      base_price: vipPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -471,7 +489,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
+      base_price: orchPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -484,26 +502,41 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       .send({
         event_id: event._id.toString(),
         sections: [
-          { section_id: vipSection._id.toString(), quantity: 2 },
-          { section_id: orchestraSection._id.toString(), quantity: 4 },
+          { section_id: vipSection._id.toString(), quantity: vipQty },
+          { section_id: orchestraSection._id.toString(), quantity: orchQty },
         ],
       });
 
     expect(res).to.have.status(201);
 
-    // Verify total tickets created = 2 + 4 = 6
+    // Verify total tickets created
     const ticketCount = await Ticket.countDocuments({ event_id: event._id });
-    expect(ticketCount).to.equal(6);
+    expect(ticketCount).to.equal(totalQty);
+
+    // DB verification: ticket fields are correct
+    const dbOrder = await Order.findOne({ user_id: user._id, event_id: event._id });
+    expect(dbOrder).to.not.be.null;
+    const tickets = await Ticket.find({ order_id: dbOrder._id });
+    tickets.forEach(t => {
+      expect(t.status).to.equal('held');
+      expect(t.hold_expires_at).to.not.be.null;
+    });
   });
 
   // --- Test 10: should include all tickets in the order response ---
   it('should include all tickets in the order response', async () => {
+    const vipPrice = randomPrice(100, 300);
+    const orchPrice = randomPrice(50, 150);
+    const vipQty = randomInt(1, 4);
+    const orchQty = randomInt(1, 4);
+    const totalQty = vipQty + orchQty;
+
     const vipSection = new VenueSection({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
       capacity: 50,
-      base_price: 200,
+      base_price: vipPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -514,7 +547,7 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
+      base_price: orchPrice,
       sold_count: 0,
       held_count: 0,
     });
@@ -527,17 +560,17 @@ describe('Bug 10 — Multi-Section Order with Transaction Rollback', function ()
       .send({
         event_id: event._id.toString(),
         sections: [
-          { section_id: vipSection._id.toString(), quantity: 2 },
-          { section_id: orchestraSection._id.toString(), quantity: 3 },
+          { section_id: vipSection._id.toString(), quantity: vipQty },
+          { section_id: orchestraSection._id.toString(), quantity: orchQty },
         ],
       });
 
     expect(res).to.have.status(201);
     expect(res.body.order).to.exist;
     expect(res.body.order.tickets).to.be.an('array');
-    // Total quantity = 2 + 3 = 5, tickets array should match
+    // Tickets array should match quantity
     expect(res.body.order.tickets).to.have.lengthOf(res.body.order.quantity);
-    expect(res.body.order.tickets).to.have.lengthOf(5);
+    expect(res.body.order.tickets).to.have.lengthOf(totalQty);
   });
 
   // --- Test 11: should handle concurrent orders without overselling (TOCTOU) ---

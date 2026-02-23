@@ -160,6 +160,16 @@ describe('Feature 2 — Event Schedule with Date Filter and Venue Grouping', fun
 
     const arenaOne = res.body.venues.find((v) => v.venue_name === 'Arena One');
     expect(arenaOne.events).to.have.lengthOf(2);
+
+    // Verify events within a venue are ordered chronologically
+    const events = arenaOne.events;
+    for (let i = 1; i < events.length; i++) {
+      expect(new Date(events[i].start_date)).to.be.above(new Date(events[i-1].start_date));
+    }
+
+    // Verify period_start and period_end are present in response
+    expect(res.body).to.have.property('period_start');
+    expect(res.body).to.have.property('period_end');
   });
 
   // --- Test 05: should only return events within date range ---
@@ -278,5 +288,26 @@ describe('Feature 2 — Event Schedule with Date Filter and Venue Grouping', fun
     expect(res).to.have.status(200);
     expect(res.body.total_events).to.equal(1);
     expect(res.body.venues[0].events[0].title).to.equal('Active Event');
+  });
+
+  // --- Test 09: should include sold_out events in schedule ---
+  it('should include sold_out events in schedule', async () => {
+    await Event.create({
+      title: 'Sold Out Event',
+      venue_id: venue1._id,
+      organizer_id: user._id,
+      start_date: new Date('2026-01-15T10:00:00Z'),
+      end_date: new Date('2026-01-15T14:00:00Z'),
+      status: 'sold_out',
+      category: 'concert',
+    });
+
+    const res = await request
+      .execute(app)
+      .get('/api/v1/events/schedule?start_date=2026-01-01&end_date=2026-01-31');
+
+    expect(res).to.have.status(200);
+    expect(res.body.total_events).to.equal(1);
+    expect(res.body.venues[0].events[0].title).to.equal('Sold Out Event');
   });
 });

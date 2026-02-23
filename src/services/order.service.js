@@ -200,7 +200,7 @@ const createMultiSectionOrder = async (userId, eventId, sectionRequests, promoCo
           },
         },
         { $inc: { held_count: req.quantity } },
-        { new: true, session }
+        { returnDocument: 'after', session }
       );
 
       if (!section) {

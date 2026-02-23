@@ -116,6 +116,7 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
       });
 
     expect(res).to.have.status(400);
+    expect(res.body.error).to.include('after');
   });
 
   // --- Test 02: Conflict — new event falls in middle of multi-day festival ---
@@ -151,6 +152,8 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     // DB verification: event was NOT created
     const dbEvent = await Event.findOne({ title: 'Mid-Festival Concert' });
     expect(dbEvent).to.be.null;
+    const eventCount = await Event.countDocuments({ title: 'Mid-Festival Concert' });
+    expect(eventCount).to.equal(0);
   });
 
   // --- Test 03: Conflict — partial overlap at start ---
@@ -186,6 +189,8 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     // DB verification: event was NOT created
     const dbEvent = await Event.findOne({ title: 'Overlapping Start Event' });
     expect(dbEvent).to.be.null;
+    const eventCount = await Event.countDocuments({ title: 'Overlapping Start Event' });
+    expect(eventCount).to.equal(0);
   });
 
   // --- Test 04: Conflict — partial overlap at end ---
@@ -221,6 +226,8 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     // DB verification: event was NOT created
     const dbEvent = await Event.findOne({ title: 'Overlapping End Event' });
     expect(dbEvent).to.be.null;
+    const eventCount = await Event.countDocuments({ title: 'Overlapping End Event' });
+    expect(eventCount).to.equal(0);
   });
 
   // --- Test 05: Conflict — enclosed event (fully within existing) ---
@@ -256,6 +263,8 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     // DB verification: event was NOT created
     const dbEvent = await Event.findOne({ title: 'Enclosed Concert' });
     expect(dbEvent).to.be.null;
+    const eventCount = await Event.countDocuments({ title: 'Enclosed Concert' });
+    expect(eventCount).to.equal(0);
   });
 
   // --- Test 06: Conflict — events too close (within 4-hour buffer) ---
@@ -294,6 +303,8 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     // DB verification: event was NOT created
     const dbEvent = await Event.findOne({ title: 'Evening Show' });
     expect(dbEvent).to.be.null;
+    const eventCount = await Event.countDocuments({ title: 'Evening Show' });
+    expect(eventCount).to.equal(0);
   });
 
   // --- Test 07: No conflict — cancelled events are ignored ---
@@ -405,5 +416,41 @@ describe('Bug 6 — Venue Scheduling with Date Range Overlap Detection', functio
     const dbEvent = await Event.findOne({ title: 'Hall Conference' });
     expect(dbEvent).to.not.be.null;
     expect(dbEvent.venue_id.toString()).to.equal(venue2._id.toString());
+  });
+
+  // --- Test 10: Draft events should not block scheduling ---
+  it('should ignore draft events and allow overlapping creation', async () => {
+    // Existing draft event at same venue and dates
+    const draftEvent = new Event({
+      title: 'Draft Festival',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date('2027-06-01T10:00:00Z'),
+      end_date: new Date('2027-06-03T22:00:00Z'),
+      status: 'draft',
+      category: 'festival',
+    });
+    await draftEvent.save();
+
+    // Create a new event at the same venue and overlapping dates — should succeed
+    const res = await request
+      .execute(app)
+      .post('/api/v1/events')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Non-Blocked Concert',
+        venue_id: venue._id.toString(),
+        start_date: new Date('2027-06-01T10:00:00Z').toISOString(),
+        end_date: new Date('2027-06-03T22:00:00Z').toISOString(),
+        category: 'concert',
+      });
+
+    expect(res).to.have.status(201);
+    expect(res.body).to.have.property('event');
+    expect(res.body.event).to.have.property('title', 'Non-Blocked Concert');
+
+    // DB verification: event was created
+    const dbEvent = await Event.findOne({ title: 'Non-Blocked Concert' });
+    expect(dbEvent).to.not.be.null;
   });
 });

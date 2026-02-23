@@ -20,7 +20,7 @@ export const confirmTicketPurchase = async (ticketId) => {
   const section = await VenueSection.findByIdAndUpdate(
     ticket.section_id,
     { $inc: { held_count: -1, sold_count: 1 } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   // 2. Clean up Redis hold key
@@ -73,7 +73,7 @@ export const confirmOrderTickets = async (orderId) => {
     const section = await VenueSection.findByIdAndUpdate(
       sectionId,
       { $inc: { held_count: -count, sold_count: count } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (section) updatedSections.push(section);
   }

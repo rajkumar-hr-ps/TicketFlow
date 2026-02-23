@@ -141,6 +141,10 @@ describe('Bug 2 — Event Status State Machine', function () {
       .send({ status: 'published' });
 
     expect(res).to.have.status(404);
+
+    // DB verification: status unchanged
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('draft');
   });
 
   // --- Test 03: draft -> published with sections ---
@@ -235,6 +239,7 @@ describe('Bug 2 — Event Status State Machine', function () {
       .send({ status: 'on_sale' });
 
     expect(res).to.have.status(400);
+    expect(res.body.error).to.include('cannot transition');
 
     // DB verification: status unchanged
     const dbEvent = await Event.findById(event._id);
@@ -261,6 +266,7 @@ describe('Bug 2 — Event Status State Machine', function () {
       .send({ status: 'published' });
 
     expect(res).to.have.status(400);
+    expect(res.body.error).to.include('cannot transition');
 
     // DB verification: status unchanged
     const dbEvent = await Event.findById(event._id);
@@ -436,5 +442,127 @@ describe('Bug 2 — Event Status State Machine', function () {
     // DB verification
     const dbEvent = await Event.findById(event._id);
     expect(dbEvent.status).to.equal('cancelled');
+  });
+
+  // --- Test 13: reject backward transition on_sale -> published ---
+  it('should reject backward transition from on_sale to published', async () => {
+    const event = new Event({
+      title: 'OnSale Backward Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000),
+      status: 'on_sale',
+      category: 'concert',
+    });
+    await event.save();
+
+    const res = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'published' });
+
+    expect(res).to.have.status(400);
+    expect(res.body.error).to.include('cannot transition');
+
+    // DB verification: status unchanged
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('on_sale');
+  });
+
+  // --- Test 14: sold_out -> on_sale with available seats (success) ---
+  it('should transition from sold_out to on_sale when seats are available', async () => {
+    const event = new Event({
+      title: 'SoldOut to OnSale Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000),
+      status: 'sold_out',
+      category: 'concert',
+    });
+    await event.save();
+
+    const section = new VenueSection({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'General',
+      capacity: 100,
+      base_price: 50,
+      sold_count: 80,
+      held_count: 0,
+    });
+    await section.save();
+
+    const res = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'on_sale' });
+
+    expect(res).to.have.status(200);
+    expect(res.body.event).to.have.property('status', 'on_sale');
+
+    // DB verification
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('on_sale');
+  });
+
+  // --- Test 15: full lifecycle draft -> published -> on_sale -> completed ---
+  it('should complete full lifecycle: draft -> published -> on_sale -> completed', async () => {
+    const event = new Event({
+      title: 'Lifecycle Event',
+      venue_id: venue._id,
+      organizer_id: organizer._id,
+      start_date: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+      end_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      status: 'draft',
+      category: 'concert',
+    });
+    await event.save();
+
+    const section = new VenueSection({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'General',
+      capacity: 100,
+      base_price: 50,
+    });
+    await section.save();
+
+    // Step 1: draft -> published
+    const res1 = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'published' });
+
+    expect(res1).to.have.status(200);
+    expect(res1.body.event).to.have.property('status', 'published');
+
+    // Step 2: published -> on_sale
+    const res2 = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'on_sale' });
+
+    expect(res2).to.have.status(200);
+    expect(res2.body.event).to.have.property('status', 'on_sale');
+
+    // Step 3: on_sale -> completed (end_date is in the past)
+    const res3 = await request
+      .execute(app)
+      .patch(`/api/v1/events/${event._id}/status`)
+      .set('Authorization', `Bearer ${organizerToken}`)
+      .send({ status: 'completed' });
+
+    expect(res3).to.have.status(200);
+    expect(res3.body.event || res3.body).to.have.property('status', 'completed');
+
+    // DB verification: final state
+    const dbEvent = await Event.findById(event._id);
+    expect(dbEvent.status).to.equal('completed');
   });
 });

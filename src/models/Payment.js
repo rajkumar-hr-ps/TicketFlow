@@ -65,7 +65,6 @@ const paymentSchema = new mongoose.Schema(
 );
 
 paymentSchema.index({ order_id: 1 });
-paymentSchema.index({ idempotency_key: 1 }, { unique: true });
 
 paymentSchema.plugin(softDeletePlugin);
 

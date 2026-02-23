@@ -58,8 +58,6 @@ const promoCodeSchema = new mongoose.Schema(
   }
 );
 
-promoCodeSchema.index({ code: 1 }, { unique: true });
-
 promoCodeSchema.plugin(softDeletePlugin);
 
 export const PromoCode = mongoose.model('PromoCode', promoCodeSchema);

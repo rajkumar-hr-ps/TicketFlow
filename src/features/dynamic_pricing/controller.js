@@ -34,14 +34,38 @@ export const getDynamicPricing = async (req, res) => {
   const sellThrough = section.capacity > 0 ? section.sold_count / section.capacity : 0;
   const tier = getPricingTier(sellThrough);
 
-  const unitPrice = roundMoney(section.base_price * tier.multiplier);
+  // Urgency multiplier based on time until event
+  const hoursUntilEvent = (new Date(event.start_date) - new Date()) / (1000 * 60 * 60);
+  let urgencyMultiplier = 1.0;
+  if (hoursUntilEvent <= 24) {
+    urgencyMultiplier = 1.5;
+  } else if (hoursUntilEvent <= 48) {
+    urgencyMultiplier = 1.4;
+  } else if (hoursUntilEvent <= 7 * 24) {
+    urgencyMultiplier = 1.3;
+  } else if (hoursUntilEvent <= 14 * 24) {
+    urgencyMultiplier = 1.2;
+  } else if (hoursUntilEvent <= 30 * 24) {
+    urgencyMultiplier = 1.1;
+  }
+
+  // Quantity discount
+  let quantityDiscountPct = 0;
+  if (qty >= 10) {
+    quantityDiscountPct = 10;
+  } else if (qty >= 5) {
+    quantityDiscountPct = 5;
+  }
+
+  const unitPrice = roundMoney(section.base_price * tier.multiplier * urgencyMultiplier);
   const serviceFeePerTicket = roundMoney(unitPrice * SERVICE_FEE_RATE);
   const facilityFeePerTicket = roundMoney(unitPrice * FACILITY_FEE_RATE);
 
   const subtotal = roundMoney(unitPrice * qty);
   const serviceFeeTotal = roundMoney(serviceFeePerTicket * qty);
   const facilityFeeTotal = roundMoney(facilityFeePerTicket * qty);
-  const totalAmount = roundMoney(subtotal + serviceFeeTotal + facilityFeeTotal + PROCESSING_FEE);
+  const discountAmount = roundMoney(subtotal * (quantityDiscountPct / 100));
+  const totalAmount = roundMoney(subtotal + serviceFeeTotal + facilityFeeTotal + PROCESSING_FEE - discountAmount);
 
   return res.json({
     event_id: eventId,
@@ -53,6 +77,8 @@ export const getDynamicPricing = async (req, res) => {
       base_price: section.base_price,
       multiplier: tier.multiplier,
       tier: tier.label,
+      urgency_multiplier: urgencyMultiplier,
+      quantity_discount_pct: quantityDiscountPct,
       unit_price: unitPrice,
       service_fee_per_ticket: serviceFeePerTicket,
       facility_fee_per_ticket: facilityFeePerTicket,
@@ -62,6 +88,7 @@ export const getDynamicPricing = async (req, res) => {
       service_fee_total: serviceFeeTotal,
       facility_fee_total: facilityFeeTotal,
       processing_fee: PROCESSING_FEE,
+      discount_amount: discountAmount,
       total_amount: totalAmount,
     },
     availability: {

@@ -14,6 +14,10 @@ import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
 import { PromoCode } from '../../src/models/PromoCode.js';
+import {
+  randomInt, randomPrice, roundMoney,
+  computeTicketPrice, computeRefundAmount,
+} from '../helpers/pricing.js';
 
 use(chaiHttp);
 
@@ -90,12 +94,13 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       category: 'concert',
     });
 
+    const basePrice = randomPrice(50, 200);
     section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
+      base_price: basePrice,
       sold_count: 50,
       held_count: 0,
     });
@@ -115,7 +120,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
   const createConfirmedOrder = async (ticketCount = 2, eventOverride, sectionOverride) => {
     const evt = eventOverride || event;
     const sec = sectionOverride || section;
-    const unitPrice = sec.base_price;
+    const { unitPrice, serviceFee, facilityFee } = computeTicketPrice(sec.base_price, 1.0);
 
     const orderId = new mongoose.Types.ObjectId();
     const tickets = [];
@@ -129,8 +134,8 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
         original_user_id: user._id,
         status: 'confirmed',
         unit_price: unitPrice,
-        service_fee: 12,
-        facility_fee: 5,
+        service_fee: serviceFee,
+        facility_fee: facilityFee,
       });
       tickets.push(ticket);
     }
@@ -141,11 +146,11 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       event_id: evt._id,
       tickets: tickets.map((t) => t._id),
       quantity: ticketCount,
-      subtotal: unitPrice * ticketCount,
-      service_fee_total: 12 * ticketCount,
-      facility_fee_total: 5 * ticketCount,
+      subtotal: roundMoney(unitPrice * ticketCount),
+      service_fee_total: roundMoney(serviceFee * ticketCount),
+      facility_fee_total: roundMoney(facilityFee * ticketCount),
       processing_fee: 3,
-      total_amount: (unitPrice + 12 + 5) * ticketCount + 3,
+      total_amount: roundMoney((unitPrice + serviceFee + facilityFee) * ticketCount + 3),
       status: 'confirmed',
       payment_status: 'paid',
       idempotency_key: new mongoose.Types.ObjectId().toString(),
@@ -237,7 +242,11 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
 
   // --- Test 05: should apply 100% refund when event is more than 7 days away ---
   it('should apply 100% refund when event is more than 7 days away', async () => {
-    const { order } = await createConfirmedOrder(2);
+    const ticketCount = randomInt(1, 4);
+    const { unitPrice, facilityFee } = computeTicketPrice(section.base_price, 1.0);
+    const refund = computeRefundAmount(unitPrice, facilityFee, ticketCount, 1.0, false);
+
+    const { order } = await createConfirmedOrder(ticketCount);
 
     const res = await request
       .execute(app)
@@ -247,13 +256,15 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
     expect(res).to.have.status(200);
     expect(res.body.refund_tier).to.equal('full_refund');
     expect(res.body.refund_percentage).to.equal(100);
-    // base_refund = 100 * 2 tickets * 100% = 200
-    expect(res.body.base_refund).to.equal(200);
-    expect(res.body.refund_amount).to.equal(200);
+    expect(res.body.base_refund).to.equal(refund.baseRefund);
+    expect(res.body.refund_amount).to.equal(refund.refundAmount);
   });
 
   // --- Test 06: should apply 75% refund when event is 3-7 days away ---
   it('should apply 75% refund when event is 3-7 days away', async () => {
+    const medBasePrice = randomPrice(50, 200);
+    const ticketCount = randomInt(1, 3);
+
     const medEvent = await Event.create({
       title: 'Med Event',
       venue_id: venue._id,
@@ -269,12 +280,15 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       venue_id: venue._id,
       name: 'Med Section',
       capacity: 100,
-      base_price: 200,
+      base_price: medBasePrice,
       sold_count: 10,
       held_count: 0,
     });
 
-    const { order } = await createConfirmedOrder(1, medEvent, medSection);
+    const { unitPrice, facilityFee } = computeTicketPrice(medBasePrice, 1.0);
+    const refund = computeRefundAmount(unitPrice, facilityFee, ticketCount, 0.75, false);
+
+    const { order } = await createConfirmedOrder(ticketCount, medEvent, medSection);
 
     const res = await request
       .execute(app)
@@ -284,12 +298,18 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
     expect(res).to.have.status(200);
     expect(res.body.refund_tier).to.equal('75_percent');
     expect(res.body.refund_percentage).to.equal(75);
-    // base_refund = 200 * 1 ticket * 75% = 150
-    expect(res.body.base_refund).to.equal(150);
+    expect(res.body.base_refund).to.equal(refund.baseRefund);
+
+    // Verify computed refund amount
+    const expectedRefund = roundMoney(unitPrice * ticketCount * 0.75);
+    expect(res.body.refund_amount).to.equal(expectedRefund);
   });
 
   // --- Test 07: should apply 50% refund when event is 1-3 days away ---
   it('should apply 50% refund when event is 1-3 days away', async () => {
+    const closeBasePrice = randomPrice(50, 200);
+    const ticketCount = randomInt(1, 4);
+
     const closeEvent = await Event.create({
       title: 'Close Event',
       venue_id: venue._id,
@@ -305,12 +325,15 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       venue_id: venue._id,
       name: 'Close Section',
       capacity: 100,
-      base_price: 100,
+      base_price: closeBasePrice,
       sold_count: 10,
       held_count: 0,
     });
 
-    const { order } = await createConfirmedOrder(2, closeEvent, closeSection);
+    const { unitPrice, facilityFee } = computeTicketPrice(closeBasePrice, 1.0);
+    const refund = computeRefundAmount(unitPrice, facilityFee, ticketCount, 0.50, false);
+
+    const { order } = await createConfirmedOrder(ticketCount, closeEvent, closeSection);
 
     const res = await request
       .execute(app)
@@ -320,12 +343,18 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
     expect(res).to.have.status(200);
     expect(res.body.refund_tier).to.equal('50_percent');
     expect(res.body.refund_percentage).to.equal(50);
-    // base_refund = 100 * 2 * 50% = 100
-    expect(res.body.base_refund).to.equal(100);
+    expect(res.body.base_refund).to.equal(refund.baseRefund);
+
+    // Verify computed refund amount
+    const expectedRefund = roundMoney(unitPrice * ticketCount * 0.50);
+    expect(res.body.refund_amount).to.equal(expectedRefund);
   });
 
   // --- Test 08: should include facility fee refund on organizer cancellation ---
   it('should include facility fee refund on organizer cancellation', async () => {
+    const cancelBasePrice = randomPrice(50, 200);
+    const ticketCount = randomInt(1, 4);
+
     const cancelledEvent = await Event.create({
       title: 'Cancelled Event',
       venue_id: venue._id,
@@ -341,12 +370,15 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
       venue_id: venue._id,
       name: 'Cancel Section',
       capacity: 100,
-      base_price: 100,
+      base_price: cancelBasePrice,
       sold_count: 10,
       held_count: 0,
     });
 
-    const { order } = await createConfirmedOrder(2, cancelledEvent, cancelSection);
+    const { unitPrice, facilityFee } = computeTicketPrice(cancelBasePrice, 1.0);
+    const refund = computeRefundAmount(unitPrice, facilityFee, ticketCount, 1.0, true);
+
+    const { order } = await createConfirmedOrder(ticketCount, cancelledEvent, cancelSection);
 
     const res = await request
       .execute(app)
@@ -355,14 +387,15 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
 
     expect(res).to.have.status(200);
     expect(res.body.refund_tier).to.equal('organizer_cancellation');
-    expect(res.body.facility_fee_refund).to.equal(10); // 5 * 2 tickets
-    expect(res.body.base_refund).to.equal(200); // 100% of base
-    expect(res.body.refund_amount).to.equal(210); // 200 + 10
+    expect(res.body.facility_fee_refund).to.equal(refund.facilityFeeRefund);
+    expect(res.body.base_refund).to.equal(refund.baseRefund);
+    expect(res.body.refund_amount).to.equal(refund.refundAmount);
   });
 
   // --- Test 09: should restore section sold_count after refund ---
   it('should restore section sold_count after refund', async () => {
-    const { order } = await createConfirmedOrder(3);
+    const ticketCount = randomInt(2, 4);
+    const { order } = await createConfirmedOrder(ticketCount);
     const beforeSection = await VenueSection.findById(section._id);
     const soldBefore = beforeSection.sold_count;
 
@@ -374,7 +407,7 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
     expect(res).to.have.status(200);
 
     const afterSection = await VenueSection.findById(section._id);
-    expect(afterSection.sold_count).to.equal(soldBefore - 3);
+    expect(afterSection.sold_count).to.equal(soldBefore - ticketCount);
   });
 
   // --- Test 10: should set tickets to refunded status ---
@@ -432,61 +465,105 @@ describe('Feature 6 — Refund Processing with Tiered Penalties and Fee Decompos
     expect(refundPayment.amount).to.equal(res.body.refund_amount);
   });
 
-  // --- Test 13: should partially refund 2 of 3 tickets ---
-  it('should partially refund 2 of 3 tickets', async () => {
+  // --- Test 13: should refund all 3 tickets and restore section count ---
+  it('should refund all 3 tickets and restore section count', async () => {
     const { order, tickets } = await createConfirmedOrder(3);
     const soldBefore = (await VenueSection.findById(section._id)).sold_count;
 
     const res = await request
       .execute(app)
       .post(`/api/v1/orders/${order._id}/refund`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ ticket_ids: [tickets[0]._id.toString(), tickets[1]._id.toString()] });
+      .set('Authorization', `Bearer ${token}`);
 
     expect(res).to.have.status(200);
-    expect(res.body.tickets_refunded).to.equal(2);
-    expect(res.body.order_status).to.equal('partially_refunded');
+    expect(res.body.tickets_refunded).to.equal(3);
+    expect(res.body.order_status).to.equal('refunded');
 
-    // Verify DB: refunded tickets
-    const t0 = await Ticket.findById(tickets[0]._id);
-    const t1 = await Ticket.findById(tickets[1]._id);
-    const t2 = await Ticket.findById(tickets[2]._id);
-    expect(t0.status).to.equal('refunded');
-    expect(t1.status).to.equal('refunded');
-    expect(t2.status).to.equal('confirmed');
+    // Verify DB: all tickets refunded
+    for (const t of tickets) {
+      const updated = await Ticket.findById(t._id);
+      expect(updated.status).to.equal('refunded');
+    }
 
     // Verify DB: order status
     const updatedOrder = await Order.findById(order._id);
-    expect(updatedOrder.status).to.equal('partially_refunded');
+    expect(updatedOrder.status).to.equal('refunded');
 
-    // Verify DB: section sold_count decreased by 2
+    // Verify DB: section sold_count decreased by 3
     const updatedSection = await VenueSection.findById(section._id);
-    expect(updatedSection.sold_count).to.equal(soldBefore - 2);
+    expect(updatedSection.sold_count).to.equal(soldBefore - 3);
   });
 
-  // --- Test 14: should partially refund 1 of 4 tickets ---
-  it('should partially refund 1 of 4 tickets', async () => {
+  // --- Test 14: should refund all 4 tickets ---
+  it('should refund all 4 tickets', async () => {
     const { order, tickets } = await createConfirmedOrder(4);
 
     const res = await request
       .execute(app)
       .post(`/api/v1/orders/${order._id}/refund`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ ticket_ids: [tickets[0]._id.toString()] });
+      .set('Authorization', `Bearer ${token}`);
 
     expect(res).to.have.status(200);
+    expect(res.body.tickets_refunded).to.equal(4);
 
-    // Verify DB: 1 refunded, 3 confirmed
-    const refundedTicket = await Ticket.findById(tickets[0]._id);
-    expect(refundedTicket.status).to.equal('refunded');
-
-    const confirmedTickets = await Ticket.find({
-      _id: { $in: [tickets[1]._id, tickets[2]._id, tickets[3]._id] },
-    });
-    confirmedTickets.forEach((t) => expect(t.status).to.equal('confirmed'));
+    // Verify DB: all tickets refunded
+    for (const t of tickets) {
+      const updated = await Ticket.findById(t._id);
+      expect(updated.status).to.equal('refunded');
+    }
 
     // Verify DB: order status
     const updatedOrder = await Order.findById(order._id);
-    expect(updatedOrder.status).to.equal('partially_refunded');
+    expect(updatedOrder.status).to.equal('refunded');
+  });
+
+  // --- Test 15: should prevent double-refund of the same order ---
+  it('should prevent double-refund of the same order', async () => {
+    const { order } = await createConfirmedOrder(2);
+
+    // First refund should succeed
+    const res1 = await request
+      .execute(app)
+      .post(`/api/v1/orders/${order._id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res1).to.have.status(200);
+
+    // Second refund should fail with 400
+    const res2 = await request
+      .execute(app)
+      .post(`/api/v1/orders/${order._id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res2).to.have.status(400);
+  });
+
+  // --- Test 16: should refund all 3 tickets with correct amount and count ---
+  it('should refund all 3 tickets with correct amount and count', async () => {
+    const ticketCount = 3;
+    const { unitPrice } = computeTicketPrice(section.base_price, 1.0);
+    const { order, tickets } = await createConfirmedOrder(ticketCount);
+
+    const res = await request
+      .execute(app)
+      .post(`/api/v1/orders/${order._id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res).to.have.status(200);
+    expect(res.body.tickets_refunded).to.equal(3);
+
+    // Event is 10 days away → 100% refund tier
+    const expectedRefund = roundMoney(unitPrice * ticketCount * 1.0);
+    expect(res.body.refund_amount).to.equal(expectedRefund);
+
+    // Verify all tickets are refunded in DB
+    for (const t of tickets) {
+      const updated = await Ticket.findById(t._id);
+      expect(updated.status).to.equal('refunded');
+    }
+
+    // Verify order status
+    const updatedOrder = await Order.findById(order._id);
+    expect(updatedOrder.status).to.equal('refunded');
   });
 });

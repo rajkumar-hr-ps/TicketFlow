@@ -13,6 +13,7 @@ import { VenueSection } from '../../src/models/VenueSection.js';
 import { Order } from '../../src/models/Order.js';
 import { Ticket } from '../../src/models/Ticket.js';
 import { Payment } from '../../src/models/Payment.js';
+import { randomPrice, roundMoney, computeTicketPrice } from '../helpers/pricing.js';
 
 use(chaiHttp);
 
@@ -27,6 +28,7 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
   this.timeout(15000);
 
   let sender, recipient, senderToken, recipientToken, venue, event, section;
+  let basePrice, unitPrice, serviceFee, facilityFee;
 
   before(async () => {
     process.env.NODE_ENV = 'test';
@@ -69,12 +71,15 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       category: 'concert',
     });
 
+    basePrice = randomPrice(50, 200);
+    ({ unitPrice, serviceFee, facilityFee } = computeTicketPrice(basePrice, 1.0));
+
     section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
       capacity: 100,
-      base_price: 100,
+      base_price: basePrice,
       sold_count: 50,
       held_count: 0,
     });
@@ -102,11 +107,11 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       user_id: userId,
       event_id: event._id,
       quantity: 1,
-      subtotal: 100,
-      service_fee_total: 12,
-      facility_fee_total: 5,
+      subtotal: unitPrice,
+      service_fee_total: serviceFee,
+      facility_fee_total: facilityFee,
       processing_fee: 3,
-      total_amount: 120,
+      total_amount: roundMoney(unitPrice + serviceFee + facilityFee + 3),
       status: 'confirmed',
       payment_status: 'paid',
       idempotency_key: new mongoose.Types.ObjectId().toString(),
@@ -119,9 +124,9 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       user_id: userId,
       original_user_id: userId,
       status: 'confirmed',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
     });
   };
 
@@ -163,6 +168,10 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       .send({ to_email: 'sender@test.com' });
 
     expect(res).to.have.status(404);
+
+    // Verify original ticket status is unchanged in DB
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
   });
 
   // --- Test 04: should return 400 when ticket is not confirmed ---
@@ -171,11 +180,11 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       user_id: sender._id,
       event_id: event._id,
       quantity: 1,
-      subtotal: 100,
-      service_fee_total: 12,
-      facility_fee_total: 5,
+      subtotal: unitPrice,
+      service_fee_total: serviceFee,
+      facility_fee_total: facilityFee,
       processing_fee: 3,
-      total_amount: 120,
+      total_amount: roundMoney(unitPrice + serviceFee + facilityFee + 3),
       status: 'pending',
       payment_status: 'pending',
       idempotency_key: new mongoose.Types.ObjectId().toString(),
@@ -188,9 +197,9 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       user_id: sender._id,
       original_user_id: sender._id,
       status: 'held',
-      unit_price: 100,
-      service_fee: 12,
-      facility_fee: 5,
+      unit_price: unitPrice,
+      service_fee: serviceFee,
+      facility_fee: facilityFee,
       hold_expires_at: new Date(Date.now() + 5 * 60 * 1000),
     });
 
@@ -202,6 +211,10 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('confirmed');
+
+    // Verify original ticket status is unchanged in DB
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('held');
   });
 
   // --- Test 05: should return 400 when event has already started ---
@@ -260,6 +273,10 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('started');
+
+    // Verify original ticket status is unchanged in DB
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
   });
 
   // --- Test 06: should return 404 when recipient email not found ---
@@ -274,6 +291,10 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
 
     expect(res).to.have.status(404);
     expect(res.body.error).to.include('recipient');
+
+    // Verify original ticket status is unchanged in DB
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
   });
 
   // --- Test 07: should return 400 when transferring to yourself ---
@@ -288,6 +309,10 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
 
     expect(res).to.have.status(400);
     expect(res.body.error).to.include('yourself');
+
+    // Verify original ticket status is unchanged in DB
+    const unchangedTicket = await Ticket.findById(ticket._id);
+    expect(unchangedTicket.status).to.equal('confirmed');
   });
 
   // --- Test 08: should invalidate original ticket on successful transfer ---
@@ -301,6 +326,11 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
       .send({ to_email: 'recipient@test.com' });
 
     expect(res).to.have.status(200);
+
+    // Response structure validation
+    expect(res.body).to.have.property('original_ticket_id');
+    expect(res.body).to.have.property('new_ticket_id');
+    expect(res.body).to.have.property('transferred_at');
 
     const updatedTicket = await Ticket.findById(ticket._id);
     expect(updatedTicket.status).to.equal('transferred');
@@ -325,6 +355,10 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
     expect(newTicket.status).to.equal('confirmed');
     expect(newTicket.event_id.toString()).to.equal(event._id.toString());
     expect(newTicket.section_id.toString()).to.equal(section._id.toString());
+
+    // Verify total ticket count (original transferred + new confirmed = 2)
+    const totalTickets = await Ticket.countDocuments({ event_id: event._id });
+    expect(totalTickets).to.equal(2);
   });
 
   // --- Test 10: should preserve original_user_id and pricing on transfer ---
@@ -341,8 +375,12 @@ describe('Feature 4 — Ticket Transfer Between Users with Validation Chain', fu
 
     const newTicket = await Ticket.findById(res.body.new_ticket_id);
     expect(newTicket.original_user_id.toString()).to.equal(sender._id.toString());
-    expect(newTicket.unit_price).to.equal(100);
-    expect(newTicket.service_fee).to.equal(12);
-    expect(newTicket.facility_fee).to.equal(5);
+    expect(newTicket.unit_price).to.equal(unitPrice);
+    expect(newTicket.service_fee).to.equal(serviceFee);
+    expect(newTicket.facility_fee).to.equal(facilityFee);
+
+    // Verify order_id is preserved from original ticket
+    const originalTicket = await Ticket.findById(ticket._id);
+    expect(newTicket.order_id.toString()).to.equal(originalTicket.order_id.toString());
   });
 });

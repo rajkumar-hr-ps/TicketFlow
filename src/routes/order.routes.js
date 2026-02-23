@@ -8,7 +8,7 @@ router.post('/', auth, createOrder);
 router.get('/', auth, getUserOrders);
 router.get('/:id', auth, getOrderById);
 
-// WARNING: This route conflicts with features/refund_processing/routes.js
-// which mounts the same path. The feature route takes precedence in
-// routes/index.js since it is mounted after this. Resolve before enabling both.
-router.post('/:id/refund', auth, processRefund);
+// Simple refund route — full refund only, no partial support.
+// The feature route at features/refund_processing handles POST /:id/refund with partial refund support.
+// TODO: Decide whether to keep or remove this route.
+router.post('/:id/simple-refund', auth, processRefund);

@@ -94,7 +94,6 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ user_id: 1 });
 orderSchema.index({ event_id: 1, status: 1 });
-orderSchema.index({ idempotency_key: 1 }, { unique: true });
 
 orderSchema.plugin(softDeletePlugin);
 

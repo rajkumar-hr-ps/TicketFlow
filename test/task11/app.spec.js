@@ -8,6 +8,10 @@ import { User } from '../../src/models/User.js';
 import { Venue } from '../../src/models/Venue.js';
 import { Event } from '../../src/models/Event.js';
 import { VenueSection } from '../../src/models/VenueSection.js';
+import {
+  randomInt, randomPrice, roundMoney,
+  getDemandMultiplier, computeTicketPrice, soldCountForTier,
+} from '../helpers/pricing.js';
 
 use(chaiHttp);
 
@@ -120,14 +124,19 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
 
   // --- Test 03: should return correct available seat count ---
   it('should return correct available seat count', async () => {
+    const capacity = randomInt(80, 200);
+    const soldCount = randomInt(10, Math.floor(capacity * 0.5));
+    const heldCount = randomInt(1, Math.floor((capacity - soldCount) * 0.3));
+    const expectedAvailable = capacity - soldCount - heldCount;
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Orchestra',
-      capacity: 100,
-      base_price: 100,
-      sold_count: 60,
-      held_count: 10,
+      capacity,
+      base_price: randomPrice(50, 200),
+      sold_count: soldCount,
+      held_count: heldCount,
     });
 
     const res = await request
@@ -135,10 +144,10 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
       .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
-    expect(res.body.available).to.equal(30);
-    expect(res.body.sold).to.equal(60);
-    expect(res.body.held).to.equal(10);
-    expect(res.body.capacity).to.equal(100);
+    expect(res.body.available).to.equal(expectedAvailable);
+    expect(res.body.sold).to.equal(soldCount);
+    expect(res.body.held).to.equal(heldCount);
+    expect(res.body.capacity).to.equal(capacity);
   });
 
   // --- Test 04: should return sold_out status when no seats available ---
@@ -162,15 +171,41 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     expect(res.body.available).to.equal(0);
   });
 
+  // --- Test 04b: should return sold_out when available is zero due to held_count ---
+  it('should return sold_out when available is zero due to held_count', async () => {
+    const section = await VenueSection.create({
+      event_id: event._id,
+      venue_id: venue._id,
+      name: 'Held Out Section',
+      capacity: 100,
+      base_price: 200,
+      sold_count: 90,
+      held_count: 10,
+    });
+
+    const res = await request
+      .execute(app)
+      .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
+
+    expect(res).to.have.status(200);
+    expect(res.body.available).to.equal(0);
+    expect(res.body.status).to.equal('sold_out');
+  });
+
   // --- Test 05: should return correct pricing tier and multiplier ---
   it('should return correct pricing tier and multiplier', async () => {
+    const basePrice = randomPrice(50, 200);
+    const capacity = randomInt(80, 200);
+    const soldCount = soldCountForTier(capacity, 'very_high_demand');
+    const { unitPrice } = computeTicketPrice(basePrice, 1.5);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
-      capacity: 100,
-      base_price: 100,
-      sold_count: 80,
+      capacity,
+      base_price: basePrice,
+      sold_count: soldCount,
       held_count: 0,
     });
 
@@ -181,18 +216,23 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     expect(res).to.have.status(200);
     expect(res.body.pricing.tier).to.equal('very_high_demand');
     expect(res.body.pricing.multiplier).to.equal(1.5);
-    expect(res.body.pricing.current_price).to.equal(150);
+    expect(res.body.pricing.current_price).to.equal(unitPrice);
   });
 
   // --- Test 06: should calculate fees correctly ---
   it('should calculate fees correctly', async () => {
+    const basePrice = randomPrice(50, 200);
+    const capacity = randomInt(80, 200);
+    const soldCount = soldCountForTier(capacity, 'very_high_demand');
+    const { unitPrice, serviceFee, facilityFee } = computeTicketPrice(basePrice, 1.5);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'VIP',
-      capacity: 100,
-      base_price: 100,
-      sold_count: 80,
+      capacity,
+      base_price: basePrice,
+      sold_count: soldCount,
       held_count: 0,
     });
 
@@ -201,20 +241,23 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
       .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
-    // current_price = 100 * 1.5 = 150
-    expect(res.body.pricing.service_fee).to.equal(18); // 150 * 0.12
-    expect(res.body.pricing.facility_fee).to.equal(7.5); // 150 * 0.05
+    expect(res.body.pricing.service_fee).to.equal(serviceFee);
+    expect(res.body.pricing.facility_fee).to.equal(facilityFee);
   });
 
   // --- Test 07: should calculate sell_through_pct correctly ---
   it('should calculate sell_through_pct correctly', async () => {
+    const capacity = randomInt(100, 500);
+    const soldCount = randomInt(10, capacity - 10);
+    const expectedPct = roundMoney((soldCount / capacity) * 100);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
       name: 'Mezzanine',
-      capacity: 500,
-      base_price: 75,
-      sold_count: 250,
+      capacity,
+      base_price: randomPrice(50, 200),
+      sold_count: soldCount,
       held_count: 0,
     });
 
@@ -223,7 +266,7 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
       .get(`/api/v1/events/${event._id}/venue-sections/${section._id}/seat-map`);
 
     expect(res).to.have.status(200);
-    expect(res.body.sell_through_pct).to.equal(50);
+    expect(res.body.sell_through_pct).to.equal(expectedPct);
   });
 
   // --- Test 08: should contain all required fields in response ---
@@ -261,17 +304,26 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     expect(res.body.pricing).to.have.property('facility_fee');
     expect(res.body).to.have.property('status');
     expect(res.body.status).to.equal('available');
+
+    // Verify returned IDs match fixture IDs
+    expect(res.body.event_id.toString()).to.equal(event._id.toString());
+    expect(res.body.section_id.toString()).to.equal(section._id.toString());
   });
 
-  // --- Test 09: should return standard tier with base_price=80 at 30% sell-through ---
-  it('should return standard tier with base_price=80 at 30% sell-through', async () => {
+  // --- Test 09: should return standard tier at low sell-through ---
+  it('should return standard tier at low sell-through', async () => {
+    const basePrice = randomPrice(50, 200);
+    const capacity = randomInt(80, 200);
+    const soldCount = soldCountForTier(capacity, 'standard');
+    const { unitPrice } = computeTicketPrice(basePrice, 1.0);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
-      name: 'Standard 80',
-      capacity: 100,
-      base_price: 80,
-      sold_count: 30,
+      name: 'Standard Section',
+      capacity,
+      base_price: basePrice,
+      sold_count: soldCount,
       held_count: 0,
     });
 
@@ -282,18 +334,23 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     expect(res).to.have.status(200);
     expect(res.body.pricing.tier).to.equal('standard');
     expect(res.body.pricing.multiplier).to.equal(1.0);
-    expect(res.body.pricing.current_price).to.equal(80);
+    expect(res.body.pricing.current_price).to.equal(unitPrice);
   });
 
-  // --- Test 10: should return high_demand tier with base_price=80 at 60% sell-through ---
-  it('should return high_demand tier with base_price=80 at 60% sell-through', async () => {
+  // --- Test 10: should return high_demand tier at 50-74% sell-through ---
+  it('should return high_demand tier at 50-74% sell-through', async () => {
+    const basePrice = randomPrice(50, 200);
+    const capacity = randomInt(80, 200);
+    const soldCount = soldCountForTier(capacity, 'high_demand');
+    const { unitPrice } = computeTicketPrice(basePrice, 1.25);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
-      name: 'High Demand 80',
-      capacity: 100,
-      base_price: 80,
-      sold_count: 60,
+      name: 'High Demand Section',
+      capacity,
+      base_price: basePrice,
+      sold_count: soldCount,
       held_count: 0,
     });
 
@@ -304,18 +361,23 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     expect(res).to.have.status(200);
     expect(res.body.pricing.tier).to.equal('high_demand');
     expect(res.body.pricing.multiplier).to.equal(1.25);
-    expect(res.body.pricing.current_price).to.equal(100); // 80 * 1.25
+    expect(res.body.pricing.current_price).to.equal(unitPrice);
   });
 
-  // --- Test 11: should return peak tier with base_price=80 at 95% sell-through ---
-  it('should return peak tier with base_price=80 at 95% sell-through', async () => {
+  // --- Test 11: should return peak tier at 90%+ sell-through ---
+  it('should return peak tier at 90%+ sell-through', async () => {
+    const basePrice = randomPrice(50, 200);
+    const capacity = randomInt(80, 200);
+    const soldCount = soldCountForTier(capacity, 'peak');
+    const { unitPrice } = computeTicketPrice(basePrice, 2.0);
+
     const section = await VenueSection.create({
       event_id: event._id,
       venue_id: venue._id,
-      name: 'Peak 80',
-      capacity: 100,
-      base_price: 80,
-      sold_count: 95,
+      name: 'Peak Section',
+      capacity,
+      base_price: basePrice,
+      sold_count: soldCount,
       held_count: 0,
     });
 
@@ -326,6 +388,6 @@ describe('Feature 1 — Seat Availability Map for Event Section', function () {
     expect(res).to.have.status(200);
     expect(res.body.pricing.tier).to.equal('peak');
     expect(res.body.pricing.multiplier).to.equal(2.0);
-    expect(res.body.pricing.current_price).to.equal(160); // 80 * 2.0
+    expect(res.body.pricing.current_price).to.equal(unitPrice);
   });
 });

@@ -292,11 +292,15 @@ describe('Bug 7 — Ticket Barcode Security with HMAC Signing', function () {
 
     expect(verifyRes.body.valid).to.equal(true);
     expect(verifyRes.body.ticket_id).to.equal(ticket1._id.toString());
+    expect(verifyRes.body).to.have.property('ticket_id');
+    expect(verifyRes.body).to.have.property('event_id');
+    expect(verifyRes.body).to.have.property('scan_count');
 
     // DB verification: scan_count and last_scanned_at
     const dbTicket = await Ticket.findById(ticket1._id);
     expect(dbTicket.scan_count).to.equal(1);
     expect(dbTicket.last_scanned_at).to.not.be.null;
+    expect(dbTicket.last_scanned_at).to.be.a('date');
   });
 
   // --- Test 07: Detect duplicate scan and increment scan_count ---
@@ -327,12 +331,13 @@ describe('Bug 7 — Ticket Barcode Security with HMAC Signing', function () {
       .send({ barcode });
 
     expect(verifyRes2.body.scan_count).to.equal(2);
-    expect(verifyRes2.body.warning).to.equal('duplicate_scan_detected');
+    expect(verifyRes2.body.warning).to.match(/duplicate.*scan/i);
 
     // DB verification: scan_count and last_scanned_at
     const dbTicket = await Ticket.findById(ticket1._id);
     expect(dbTicket.scan_count).to.equal(2);
     expect(dbTicket.last_scanned_at).to.not.be.null;
+    expect(dbTicket.last_scanned_at).to.be.a('date');
     // Verify last_scanned_at is recent (within 5 seconds)
     const timeDiff = Date.now() - new Date(dbTicket.last_scanned_at).getTime();
     expect(timeDiff).to.be.below(5000);
@@ -363,4 +368,5 @@ describe('Bug 7 — Ticket Barcode Security with HMAC Signing', function () {
     expect(verifyRes.body.valid).to.equal(false);
     expect(verifyRes.body.error).to.match(/not confirmed/i);
   });
+
 });

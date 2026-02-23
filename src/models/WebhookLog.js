@@ -37,6 +37,4 @@ const webhookLogSchema = new mongoose.Schema(
   }
 );
 
-webhookLogSchema.index({ webhook_event_id: 1 }, { unique: true });
-
 export const WebhookLog = mongoose.model('WebhookLog', webhookLogSchema);

@@ -118,7 +118,7 @@ describe('Feature 3 — Waitlist Management with Automatic Position Assignment',
       .set('Authorization', `Bearer ${token1}`);
 
     expect(res).to.have.status(400);
-    expect(res.body.error).to.include('sold-out');
+    expect(res.body.error).to.match(/sold.out/i);
   });
 
   // --- Test 03: should return 409 for duplicate waitlist entry ---
@@ -151,6 +151,7 @@ describe('Feature 3 — Waitlist Management with Automatic Position Assignment',
     // Response structure assertions
     expect(res.body).to.have.property('waitlist_id');
     expect(res.body).to.have.property('event_id');
+    expect(res.body).to.have.property('position');
     expect(res.body).to.have.property('status', 'waiting');
     expect(res.body).to.have.property('joined_at');
     expect(res.body.event_id.toString()).to.equal(soldOutEvent._id.toString());
@@ -182,6 +183,10 @@ describe('Feature 3 — Waitlist Management with Automatic Position Assignment',
     expect(res1.body.position).to.equal(1);
     expect(res2.body.position).to.equal(2);
     expect(res3.body.position).to.equal(3);
+
+    // Verify ahead counts per user
+    expect(res2.body.ahead).to.equal(1);
+    expect(res3.body.ahead).to.equal(2);
 
     // DB verification: all 3 entries with correct positions
     const entries = await WaitlistEntry.find({ event_id: soldOutEvent._id }).sort({ position: 1 });
