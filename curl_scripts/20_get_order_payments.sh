@@ -24,7 +24,7 @@ echo "==> Get Payments for Order"
 echo "Order ID: $ORDER_ID"
 echo ""
 
-RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/payments/orders/${ORDER_ID}/payments" \
+RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/orders/${ORDER_ID}/payments" \
   -H "Authorization: Bearer ${TOKEN}")
 
 check_response "$RESPONSE"

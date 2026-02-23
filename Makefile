@@ -23,10 +23,7 @@ install:
 	@echo "  make run                  # Seed + start Express server"
 	@echo "  make test FEATURE=1       # Run task 1 tests"
 
-run: seed
-	@echo "Checking for processes on port $(PORT)..."
-	@lsof -ti:$(PORT) | xargs kill -9 2>/dev/null || true
-	@sleep 1
+run: install seed
 	@echo "Starting Express server on port $(PORT)..."
 	@$(NODE) src/server.js
 

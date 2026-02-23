@@ -7,7 +7,7 @@ BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 TOKEN="${TOKEN:-$(read_arg 'token' '')}"
 EVENT_ID="${EVENT_ID:-$(read_arg 'event_id' '')}"
-SECTION_ID="${SECTION_ID:-$(read_arg 'venue_section_id' '')}"
+VENUE_SECTION_ID="${VENUE_SECTION_ID:-$(read_arg 'venue_section_id' '')}"
 QUANTITY="${QUANTITY:-$(read_arg 'quantity' '2')}"
 PROMO_CODE="${PROMO_CODE:-$(read_arg 'promo_code' '')}"
 
@@ -23,17 +23,17 @@ if [ -z "$EVENT_ID" ]; then
   exit 1
 fi
 
-if [ -z "$SECTION_ID" ]; then
-  echo "Error: SECTION_ID (venue_section_id) must be set"
+if [ -z "$VENUE_SECTION_ID" ]; then
+  echo "Error: VENUE_SECTION_ID must be set"
   echo "Run ./10_get_sections.sh first or edit arguments.json"
   exit 1
 fi
 
 echo "==> Create Order"
-echo "Event: $EVENT_ID | Venue Section: $SECTION_ID | Quantity: $QUANTITY"
+echo "Event: $EVENT_ID | Venue Section: $VENUE_SECTION_ID | Quantity: $QUANTITY"
 
 # Build JSON body
-BODY="{\"event_id\":\"${EVENT_ID}\",\"section_id\":\"${SECTION_ID}\",\"quantity\":${QUANTITY}"
+BODY="{\"event_id\":\"${EVENT_ID}\",\"section_id\":\"${VENUE_SECTION_ID}\",\"quantity\":${QUANTITY}"
 if [ -n "$PROMO_CODE" ]; then
   BODY="${BODY},\"promo_code\":\"${PROMO_CODE}\""
   echo "Promo: $PROMO_CODE"

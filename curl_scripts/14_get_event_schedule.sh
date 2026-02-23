@@ -1,5 +1,5 @@
 #!/bin/bash
-# Browse Upcoming Events - View events grouped by venue within a date range
+# Get Event Schedule - View upcoming events grouped by venue within a date range
 
 source "$(dirname "$0")/common.sh"
 
@@ -17,7 +17,7 @@ fi
 START_DATE="${START_DATE:-$(read_arg 'start_date' "$DEFAULT_START")}"
 END_DATE="${END_DATE:-$(read_arg 'end_date' "$DEFAULT_END")}"
 
-echo "==> Browse Upcoming Events"
+echo "==> Get Event Schedule"
 echo "Period: $START_DATE to $END_DATE"
 echo ""
 
@@ -27,9 +27,12 @@ check_response "$RESPONSE"
 format_json "$RESPONSE"
 
 echo ""
-echo "Note: Only events with status 'on_sale' or 'sold_out' appear here."
+echo "Note: Only events with status 'on_sale' or 'sold_out' appear in the schedule."
 echo "Draft, published, completed, and cancelled events are excluded."
-echo "Make sure to run ./09_update_event_status.sh to advance events to 'on_sale'."
+echo "Events are grouped by venue and include price ranges and availability."
+echo ""
+echo "If no events appear, make sure you have advanced at least one event to 'on_sale':"
+echo "  ./09_update_event_status.sh"
 echo ""
 echo "Tip: Narrow the date range:"
 echo "  START_DATE=2026-03-01T00:00:00Z END_DATE=2026-03-31T23:59:59Z ./14_get_event_schedule.sh"

@@ -79,8 +79,13 @@ if [ -n "$EVENT_ID" ]; then
   echo "Overlapping events on the same venue and date are allowed while in 'draft'."
   echo "The overlap check is enforced only when publishing the event."
   echo ""
+  echo "Event names auto-increment (Rock Concert 1, Rock Concert 2, ...) to avoid"
+  echo "duplicates across runs. The counter is stored in arguments.json."
+  echo ""
+  echo "Valid categories: concert, sports, theater, conference, festival, comedy"
+  echo ""
   echo "Tip: Override event details with env vars:"
-  echo "  EVENT_TITLE=\"Jazz Night\" EVENT_CATEGORY=concert ./06_create_event.sh"
+  echo "  EVENT_TITLE=\"Jazz Night\" EVENT_CATEGORY=theater ./06_create_event.sh"
 else
   echo "✗ Event creation failed - ID not found in response"
   exit 1
