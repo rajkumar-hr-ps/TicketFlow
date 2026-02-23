@@ -39,3 +39,5 @@ if [ -n "$TICKET_ID" ]; then
 fi
 
 echo ""
+echo "Tip: Use the ticket ID for:"
+echo "  ./24_transfer_ticket.sh   - Transfer to another user"

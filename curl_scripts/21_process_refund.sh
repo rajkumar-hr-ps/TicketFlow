@@ -29,4 +29,9 @@ RESPONSE=$(curl -s -X POST "${BASE_URL}/api/v1/orders/${ORDER_ID}/refund" \
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Note: Refund amount is tiered based on time until event:"
+echo "  72+ hours before  = 100% refund"
+echo "  24-72 hours       = 50% refund"
+echo "  <24 hours         = no refund"

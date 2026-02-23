@@ -19,4 +19,9 @@ RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/orders" \
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Tip: Use an order _id from above for:"
+echo "  ./19_get_order.sh             - Full order details with tickets"
+echo "  ./20_get_order_payments.sh    - Payment status"
+echo "  ./21_process_refund.sh        - Request a refund"

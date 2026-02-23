@@ -33,7 +33,8 @@ if [ -n "$TOKEN" ]; then
   write_arg "token" "$TOKEN"
   write_arg "user_id" "$USER_ID"
   echo "✓ Token saved to arguments.json"
-  echo "✓ You can now run: ./04_create_venue.sh"
+  echo ""
+  echo "Next: ./04_create_venue.sh (organizer) or ./07_list_events.sh (customer)"
 else
   echo "✗ Login failed - check credentials"
   exit 1

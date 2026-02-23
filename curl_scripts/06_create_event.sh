@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create Event - Create an event with sections
+# Create Event - Create an event with venue sections
 
 source "$(dirname "$0")/common.sh"
 
@@ -29,7 +29,11 @@ else
   END_DATE=$(date -u -d "+30 days +3 hours" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+30d -v+3H '+%Y-%m-%dT%H:%M:%SZ')
 fi
 
-EVENT_TITLE="${EVENT_TITLE:-Rock Concert 2026}"
+# Auto-increment event counter for unique names
+EVENT_COUNTER=$(read_arg 'event_counter' '0')
+EVENT_COUNTER=$((EVENT_COUNTER + 1))
+
+EVENT_TITLE="${EVENT_TITLE:-Rock Concert ${EVENT_COUNTER}}"
 EVENT_CATEGORY="${EVENT_CATEGORY:-concert}"
 
 echo "==> Create Event"
@@ -63,8 +67,20 @@ EVENT_ID=$(extract_json_value "$RESPONSE" "event._id")
 echo ""
 if [ -n "$EVENT_ID" ]; then
   write_arg "event_id" "$EVENT_ID"
+  write_arg "event_counter" "$EVENT_COUNTER"
   echo "✓ Event ID saved to arguments.json"
-  echo "✓ Next: run ./09_update_event_status.sh to publish and put on sale"
+  echo ""
+  echo "Next: ./09_update_event_status.sh (to publish and put on sale)"
+  echo ""
+  echo "Note: Events are created in 'draft' status. You must transition through"
+  echo "the lifecycle before tickets can be ordered:"
+  echo "  draft -> published -> on_sale -> sold_out / completed / cancelled"
+  echo ""
+  echo "Overlapping events on the same venue and date are allowed while in 'draft'."
+  echo "The overlap check is enforced only when publishing the event."
+  echo ""
+  echo "Tip: Override event details with env vars:"
+  echo "  EVENT_TITLE=\"Jazz Night\" EVENT_CATEGORY=concert ./06_create_event.sh"
 else
   echo "✗ Event creation failed - ID not found in response"
   exit 1

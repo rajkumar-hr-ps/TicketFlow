@@ -38,4 +38,10 @@ RESPONSE=$(curl -s -X POST "${BASE_URL}/api/v1/tickets/${TICKET_ID}/transfer" \
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Note: The recipient must be a registered user."
+echo "The ticket's ownership transfers immediately — this cannot be undone."
+echo ""
+echo "Tip: Set the recipient:"
+echo "  TO_EMAIL=friend@example.com ./24_transfer_ticket.sh"

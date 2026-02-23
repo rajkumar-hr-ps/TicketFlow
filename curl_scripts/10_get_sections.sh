@@ -1,5 +1,5 @@
 #!/bin/bash
-# Get Sections - List sections for an event
+# Get Venue Sections - List venue sections for an event
 
 source "$(dirname "$0")/common.sh"
 
@@ -13,21 +13,25 @@ if [ -z "$EVENT_ID" ]; then
   exit 1
 fi
 
-echo "==> Get Event Sections"
+echo "==> Get Venue Sections"
 echo "Event ID: $EVENT_ID"
 echo ""
 
-RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/sections")
+RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/venue-sections")
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
 
-# Auto-save first section_id
-SECTION_ID=$(echo "$RESPONSE" | jq -r '.sections[0]._id // empty' 2>/dev/null)
-if [ -n "$SECTION_ID" ]; then
-  write_arg "section_id" "$SECTION_ID"
+# Auto-save first venue_section_id
+VENUE_SECTION_ID=$(echo "$RESPONSE" | jq -r '.venueSections[0]._id // empty' 2>/dev/null)
+if [ -n "$VENUE_SECTION_ID" ]; then
+  write_arg "venue_section_id" "$VENUE_SECTION_ID"
   echo ""
-  echo "✓ First section ID ($SECTION_ID) saved to arguments.json"
+  echo "✓ First venue section ID ($VENUE_SECTION_ID) saved to arguments.json"
 fi
 
 echo ""
+echo "Tip: Use a venue section ID from above for:"
+echo "  ./11_get_section_availability.sh   - Check available seats"
+echo "  ./12_get_seat_map.sh               - Seat map with pricing"
+echo "  ./13_get_dynamic_pricing.sh        - Current pricing tier"

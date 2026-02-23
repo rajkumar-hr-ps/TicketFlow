@@ -1,5 +1,5 @@
 #!/bin/bash
-# Get Event - Retrieve event details with sections
+# Get Event - Retrieve event details with venue sections and availability
 
 source "$(dirname "$0")/common.sh"
 
@@ -22,12 +22,17 @@ RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}")
 check_response "$RESPONSE"
 format_json "$RESPONSE"
 
-# Auto-save first section_id for convenience
-SECTION_ID=$(echo "$RESPONSE" | jq -r '.sections[0]._id // empty' 2>/dev/null)
-if [ -n "$SECTION_ID" ]; then
-  write_arg "section_id" "$SECTION_ID"
+# Auto-save first venue_section_id for convenience
+VENUE_SECTION_ID=$(echo "$RESPONSE" | jq -r '.venueSections[0]._id // empty' 2>/dev/null)
+if [ -n "$VENUE_SECTION_ID" ]; then
+  write_arg "venue_section_id" "$VENUE_SECTION_ID"
   echo ""
-  echo "✓ First section ID ($SECTION_ID) saved to arguments.json"
+  echo "✓ First venue section ID ($VENUE_SECTION_ID) saved to arguments.json"
 fi
 
 echo ""
+echo "Tip: The response includes venueSections with 'available' seat counts."
+echo "Use venue section IDs from above for:"
+echo "  ./11_get_section_availability.sh   - Detailed availability"
+echo "  ./12_get_seat_map.sh               - Seat map with pricing"
+echo "  ./17_create_order.sh               - Order tickets"

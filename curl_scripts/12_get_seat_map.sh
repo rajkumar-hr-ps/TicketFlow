@@ -6,7 +6,7 @@ source "$(dirname "$0")/common.sh"
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 EVENT_ID="${EVENT_ID:-$(read_arg 'event_id' '')}"
-SECTION_ID="${SECTION_ID:-$(read_arg 'section_id' '')}"
+SECTION_ID="${SECTION_ID:-$(read_arg 'venue_section_id' '')}"
 
 if [ -z "$EVENT_ID" ]; then
   echo "Error: EVENT_ID must be set"
@@ -24,8 +24,11 @@ echo "==> Get Seat Availability Map"
 echo "Event: $EVENT_ID | Section: $SECTION_ID"
 echo ""
 
-RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/sections/${SECTION_ID}/seat-map")
+RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/venue-sections/${SECTION_ID}/seat-map")
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Tip: The seat map shows per-seat status (available/held/sold) with pricing."
+echo "Prices reflect dynamic pricing based on current demand."

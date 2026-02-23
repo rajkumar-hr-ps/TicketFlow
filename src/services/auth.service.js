@@ -30,8 +30,8 @@ export const register = async ({ name, email, password, role }) => {
     throw new BadRequestError('Password must contain at least one uppercase letter, one lowercase letter, and one digit');
   }
 
-  if (role !== undefined && role !== 'customer') {
-    throw new BadRequestError('self-registration is only allowed for the customer role');
+  if (role !== undefined && !USER_ROLES.includes(role)) {
+    throw new BadRequestError(`Invalid role. Must be one of: ${USER_ROLES.join(', ')}`);
   }
 
   const existingUser = await User.findOneActive({ email: email.toLowerCase() });

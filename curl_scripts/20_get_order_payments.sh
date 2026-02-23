@@ -29,4 +29,18 @@ RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/payments/orders/${ORDER_ID}/paymen
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
+# Auto-save first payment_id and amount for the webhook script
+PAYMENT_ID=$(echo "$RESPONSE" | jq -r '.payments[0]._id // empty' 2>/dev/null)
+PAYMENT_AMOUNT=$(echo "$RESPONSE" | jq -r '.payments[0].amount // empty' 2>/dev/null)
+if [ -n "$PAYMENT_ID" ]; then
+  write_arg "payment_id" "$PAYMENT_ID"
+  write_arg "payment_amount" "$PAYMENT_AMOUNT"
+  echo ""
+  echo "✓ Payment ID ($PAYMENT_ID) saved to arguments.json"
+  echo "✓ Payment amount ($PAYMENT_AMOUNT) saved to arguments.json"
+fi
+
 echo ""
+echo "Note: Payments start as 'pending'. To complete the payment flow:"
+echo "  ./25_payment_webhook.sh   - Simulate payment gateway confirmation"

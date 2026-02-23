@@ -29,4 +29,6 @@ RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/waitlist" \
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Note: Lower position = closer to getting a ticket when one becomes available."

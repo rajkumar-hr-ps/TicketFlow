@@ -95,7 +95,7 @@ Edit `arguments.json` to change parameters:
   "email": "custom@example.com",
   "password": "MyPassword123!",
   "event_id": "event-object-id",
-  "section_id": "section-object-id",
+  "venue_section_id": "section-object-id",
   "quantity": "4",
   "promo_code": "SAVE20"
 }

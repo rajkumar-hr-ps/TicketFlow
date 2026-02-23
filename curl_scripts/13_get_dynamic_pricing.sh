@@ -7,7 +7,7 @@ BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 TOKEN="${TOKEN:-$(read_arg 'token' '')}"
 EVENT_ID="${EVENT_ID:-$(read_arg 'event_id' '')}"
-SECTION_ID="${SECTION_ID:-$(read_arg 'section_id' '')}"
+SECTION_ID="${SECTION_ID:-$(read_arg 'venue_section_id' '')}"
 QUANTITY="${QUANTITY:-$(read_arg 'quantity' '2')}"
 
 if [ -z "$TOKEN" ]; then
@@ -31,4 +31,10 @@ RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/pricing?section
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Tip: Pricing tiers based on sell-through percentage:"
+echo "  0-49%  = 1.0x (base)    50-74% = 1.25x (high demand)"
+echo "  75-89% = 1.5x (surge)   90%+   = 2.0x (peak)"
+echo ""
+echo "Override quantity: QUANTITY=5 ./13_get_dynamic_pricing.sh"

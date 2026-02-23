@@ -30,4 +30,9 @@ RESPONSE=$(curl -s -X POST "${BASE_URL}/api/v1/events/${EVENT_ID}/waitlist" \
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Note: Waitlist is only available for events in 'sold_out' status."
+echo "You'll be notified when tickets become available (e.g., after a refund)."
+echo ""
+echo "Next: ./23_get_waitlist_position.sh   - Check your position"

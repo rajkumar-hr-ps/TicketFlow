@@ -23,4 +23,11 @@ RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events?${QUERY}")
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Tip: Filter events by status or category:"
+echo "  STATUS=on_sale ./07_list_events.sh"
+echo "  CATEGORY=concert ./07_list_events.sh"
+echo "  STATUS=draft CATEGORY=conference ./07_list_events.sh"
+echo ""
+echo "Valid statuses: draft, published, on_sale, sold_out, completed, cancelled"

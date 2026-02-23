@@ -1,12 +1,12 @@
 #!/bin/bash
-# Get Section Availability - Check available seats in a section
+# Get Venue Section Availability - Check available seats in a venue section
 
 source "$(dirname "$0")/common.sh"
 
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 EVENT_ID="${EVENT_ID:-$(read_arg 'event_id' '')}"
-SECTION_ID="${SECTION_ID:-$(read_arg 'section_id' '')}"
+SECTION_ID="${SECTION_ID:-$(read_arg 'venue_section_id' '')}"
 
 if [ -z "$EVENT_ID" ]; then
   echo "Error: EVENT_ID must be set"
@@ -20,12 +20,15 @@ if [ -z "$SECTION_ID" ]; then
   exit 1
 fi
 
-echo "==> Get Section Availability"
-echo "Event: $EVENT_ID | Section: $SECTION_ID"
+echo "==> Get Venue Section Availability"
+echo "Event: $EVENT_ID | Venue Section: $SECTION_ID"
 echo ""
 
-RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/sections/${SECTION_ID}/availability")
+RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/events/${EVENT_ID}/venue-sections/${SECTION_ID}/availability")
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Tip: Available = capacity - sold_count - held_count"
+echo "Held tickets expire after a timeout and become available again."

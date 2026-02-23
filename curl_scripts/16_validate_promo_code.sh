@@ -34,4 +34,7 @@ RESPONSE=$(curl -s -X GET "${BASE_URL}/api/v1/promo-codes/${PROMO_CODE}/validate
 
 check_response "$RESPONSE"
 format_json "$RESPONSE"
+
 echo ""
+echo "Tip: Validate a different code or quantity:"
+echo "  PROMO_CODE=FLAT10 QUANTITY=5 ./16_validate_promo_code.sh"

@@ -1,6 +1,5 @@
 #!/bin/bash
-# Update Event Status - Transition event through state machine
-# Valid transitions: draft -> published -> on_sale -> sold_out/completed/cancelled
+# Update Event Status - Transition event through the status lifecycle
 
 source "$(dirname "$0")/common.sh"
 
@@ -36,6 +35,11 @@ check_response "$RESPONSE"
 format_json "$RESPONSE"
 
 echo ""
-echo "Tip: Run this script multiple times with different statuses:"
+echo "Tip: Run this script multiple times to advance the lifecycle:"
 echo "  NEW_STATUS=published ./09_update_event_status.sh"
-echo "  NEW_STATUS=on_sale ./09_update_event_status.sh"
+echo "  NEW_STATUS=on_sale   ./09_update_event_status.sh"
+echo ""
+echo "Valid transitions:"
+echo "  draft -> published -> on_sale -> sold_out / completed / cancelled"
+echo ""
+echo "Note: Events must be 'on_sale' before customers can order tickets."
