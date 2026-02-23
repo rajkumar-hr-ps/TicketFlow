@@ -1,12 +1,17 @@
 import crypto from 'crypto';
 import { Ticket, TicketStatus } from '../models/Ticket.js';
 import { config } from '../config/env.js';
-import { NotFoundError } from '../utils/AppError.js';
+import { NotFoundError, BadRequestError } from '../utils/AppError.js';
 
 // --- Bug 7 Solution: HMAC barcode generation and verification ---
-export const generateBarcodeForTicket = async (ticketId) => {
-  const ticket = await Ticket.findOneActive({ _id: ticketId });
+export const generateBarcodeForTicket = async (ticketId, userId) => {
+  const query = { _id: ticketId };
+  if (userId) query.user_id = userId;
+  const ticket = await Ticket.findOneActive(query);
   if (!ticket) throw new NotFoundError('ticket not found');
+  if (ticket.status !== TicketStatus.CONFIRMED) {
+    throw new BadRequestError('barcode can only be generated for confirmed tickets');
+  }
   return { barcode: generateBarcode(ticket._id, ticket.user_id, ticket.event_id) };
 };
 

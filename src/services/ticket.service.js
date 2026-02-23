@@ -6,12 +6,20 @@ import { removeHold } from './hold.service.js';
 import { getAvailableSeats } from '../utils/helpers.js';
 
 // --- Bug 3 Solution: Hold-to-purchase with counter transitions ---
-export const confirmTicketPurchase = async (ticketId) => {
+export const confirmTicketPurchase = async (ticketId, userId) => {
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) throw new NotFoundError('ticket not found');
 
+  if (userId && ticket.user_id.toString() !== userId.toString()) {
+    throw new NotFoundError('ticket not found');
+  }
+
   if (ticket.status !== TicketStatus.HELD) {
     throw new BadRequestError('only held tickets can be confirmed');
+  }
+
+  if (ticket.hold_expires_at && new Date(ticket.hold_expires_at) < new Date()) {
+    throw new BadRequestError('ticket hold has expired');
   }
 
   // 1. Transition section counters: held → sold

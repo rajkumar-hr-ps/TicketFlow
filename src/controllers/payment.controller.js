@@ -1,7 +1,7 @@
 import * as paymentService from '../services/payment.service.js';
 
 export const getPayments = async (req, res) => {
-  const payments = await paymentService.getPaymentsByOrder(req.params.id);
+  const payments = await paymentService.getPaymentsByOrder(req.params.id, req.user._id);
   res.json({ payments });
 };
 

@@ -4,7 +4,11 @@ import { WebhookLog } from '../models/WebhookLog.js';
 import { NotFoundError, BadRequestError } from '../utils/AppError.js';
 import { confirmOrderTickets } from './ticket.service.js';
 
-export const getPaymentsByOrder = async (orderId) => {
+export const getPaymentsByOrder = async (orderId, userId) => {
+  if (userId) {
+    const order = await Order.findOneActive({ _id: orderId, user_id: userId });
+    if (!order) throw new NotFoundError('order not found');
+  }
   const payments = await Payment.findActive({ order_id: orderId }).sort({ created_at: -1 });
   return payments;
 };

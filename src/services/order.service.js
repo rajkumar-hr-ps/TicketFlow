@@ -58,6 +58,9 @@ export const createOrder = async (userId, data) => {
   // Validate promo code
   let promoCode = null;
   if (promo_code) {
+    if (typeof promo_code !== 'string') {
+      throw new BadRequestError('promo_code must be a string');
+    }
     const result = await promoCodeService.validatePromoCode(promo_code, event_id, quantity);
     if (result.valid) {
       promoCode = result.promo;

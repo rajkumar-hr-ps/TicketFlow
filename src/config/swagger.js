@@ -646,7 +646,7 @@ const swaggerDefinition = {
                   type: 'object',
                   properties: {
                     event: { $ref: '#/components/schemas/Event' },
-                    sections: {
+                    venueSections: {
                       type: 'array',
                       items: {
                         allOf: [
@@ -816,7 +816,7 @@ const swaggerDefinition = {
                 schema: {
                   type: 'object',
                   properties: {
-                    sections: {
+                    venueSections: {
                       type: 'array',
                       items: { $ref: '#/components/schemas/VenueSection' },
                     },

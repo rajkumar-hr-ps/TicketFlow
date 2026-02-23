@@ -76,6 +76,10 @@ export const createEvent = async (userId, data) => {
     throw new BadRequestError('end_date must be after start_date');
   }
 
+  if (new Date(start_date) <= new Date()) {
+    throw new BadRequestError('start_date must be in the future');
+  }
+
   if (!EVENT_CATEGORIES.includes(category)) {
     throw new BadRequestError(`category must be one of: ${EVENT_CATEGORIES.join(', ')}`);
   }
@@ -150,8 +154,8 @@ export const getEvents = async (filters = {}) => {
   if (category) query.category = category;
   if (venue_id) query.venue_id = venue_id;
 
-  const pageNum = Math.max(1, parseInt(page, 10));
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
   const skip = (pageNum - 1) * limitNum;
 
   const [events, total] = await Promise.all([
