@@ -1,4 +1,5 @@
 import * as orderService from '../services/order.service.js';
+import { processRefund as processRefundService } from '../services/refund.service.js';
 
 export const createOrder = async (req, res) => {
   const result = await orderService.createOrder(req.user._id, req.body);
@@ -20,7 +21,6 @@ export const getOrderById = async (req, res) => {
 // before enabling both — currently the feature route takes precedence
 // since it is mounted after this in routes/index.js.
 export const processRefund = async (req, res) => {
-  const result = await orderService.processRefund(req.params.id, req.user._id);
+  const result = await processRefundService(req.params.id, req.user._id);
   res.json(result);
 };
-

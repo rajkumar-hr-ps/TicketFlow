@@ -1,6 +1,6 @@
 import { VenueSection } from '../models/VenueSection.js';
 import { NotFoundError } from '../utils/AppError.js';
-import { roundMoney } from '../utils/helpers.js';
+import { roundMoney, getSellThroughRatio } from '../utils/helpers.js';
 
 export const PRICING_TIERS = [
   { threshold: 0.90, multiplier: 2.0, label: 'peak' },
@@ -37,10 +37,7 @@ export const getRefundTier = (hoursUntilEvent, isOrganizerCancellation) => {
 };
 
 export const getDynamicMultiplier = (section) => {
-  const sellThrough = section.capacity > 0
-    ? section.sold_count / section.capacity
-    : 0;
-  return getPricingTier(sellThrough);
+  return getPricingTier(getSellThroughRatio(section));
 };
 
 export const calculateTicketPrice = (basePrice, multiplier) => {

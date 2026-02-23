@@ -1,6 +1,6 @@
 import { VenueSection } from '../models/VenueSection.js';
 import { NotFoundError } from '../utils/AppError.js';
-import { roundMoney, getAvailableSeats } from '../utils/helpers.js';
+import { roundMoney, getAvailableSeats, getSellThroughRatio } from '../utils/helpers.js';
 import { getPricingTier } from './pricing.service.js';
 
 export const getSectionsByEvent = async (eventId) => {
@@ -18,7 +18,7 @@ export const getSectionAvailability = async (eventId, sectionId) => {
   }
 
   const available = getAvailableSeats(section);
-  const sellThrough = section.capacity > 0 ? section.sold_count / section.capacity : 0;
+  const sellThrough = getSellThroughRatio(section);
   const tier = getPricingTier(sellThrough);
   const currentPrice = roundMoney(section.base_price * tier.multiplier);
 

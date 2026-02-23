@@ -16,29 +16,6 @@ const VALID_STATUS_TRANSITIONS = {
   [PaymentStatus.FAILED]: [PaymentStatus.PROCESSING],
 };
 
-const verifyWebhookSignature = (signature, body) => {
-  if (!signature) {
-    throw new UnauthorizedError('missing webhook signature');
-  }
-
-  const expectedSignature = crypto
-    .createHmac('sha256', config.paymentWebhookSecret)
-    .update(JSON.stringify(body))
-    .digest('hex');
-
-  try {
-    if (!crypto.timingSafeEqual(
-      Buffer.from(signature, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
-    )) {
-      throw new UnauthorizedError('invalid webhook signature');
-    }
-  } catch (err) {
-    if (err instanceof UnauthorizedError) throw err;
-    throw new UnauthorizedError('invalid webhook signature');
-  }
-};
-
 export const processWebhook = async (body) => {
   const { payment_id, status, amount, webhook_event_id } = body;
 

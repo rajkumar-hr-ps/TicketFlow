@@ -1,7 +1,6 @@
 import { PromoCode, DISCOUNT_TYPES } from '../models/PromoCode.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
-
-const isValidDate = (v) => !isNaN(new Date(v).getTime());
+import { isValidDate } from '../utils/helpers.js';
 
 export const createPromoCode = async (data) => {
   const {

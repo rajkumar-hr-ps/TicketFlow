@@ -2,8 +2,7 @@ import jwt from 'jsonwebtoken';
 import { User, USER_ROLES } from '../models/User.js';
 import { config } from '../config/env.js';
 import { BadRequestError, UnauthorizedError, NotFoundError } from '../utils/AppError.js';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { EMAIL_RE } from '../utils/helpers.js';
 
 export const register = async ({ name, email, password, role }) => {
   if (!name || !email || !password) {
